@@ -11,7 +11,7 @@ export function Markdown({value}:{value:string}){
    if(p.startsWith('$')&&p.endsWith('$'))return katex.renderToString(p.slice(1,-1),{throwOnError:false,trust:false});
    return marked.parse(p,{async:false});
   }).join('');
-  return DOMPurify.sanitize(rendered,{ADD_ATTR:['class','style','aria-hidden']});
+  return DOMPurify.sanitize(rendered,{ADD_ATTR:['class','style','aria-hidden'],ADD_DATA_URI_TAGS:['audio','source']});
  },[value]);
  return <div className="markdown" dangerouslySetInnerHTML={{__html:html}}/>;
 }
