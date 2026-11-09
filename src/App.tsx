@@ -1,13 +1,33 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Sidebar, { type Page } from "./components/Sidebar";
 import Dashboard from "./features/dashboard/Dashboard";
 import ReviewPage from "./features/review/ReviewPage";
 import { BookOpen, Layers3, Settings, ChartNoAxesColumn, Plus } from "lucide-react";
 
+const THEME_STORAGE_KEY = "furasshukado:theme";
+
+function getInitialTheme(): boolean {
+  try {
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    return savedTheme === null ? true : savedTheme === "dark";
+  } catch {
+    // Keep dark mode as the default when browser storage is unavailable.
+    return true;
+  }
+}
+
 export default function App() {
   const [activePage, setActivePage] = useState<Page>("Accueil");
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState<boolean>(getInitialTheme);
   const [reviewing, setReviewing] = useState(false);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, dark ? "dark" : "light");
+    } catch {
+      // The theme still works for the current session if storage is unavailable.
+    }
+  }, [dark]);
 
   if (reviewing) return <div className={dark ? "app-shell dark" : "app-shell"}><ReviewPage onExit={() => setReviewing(false)} /></div>;
 
