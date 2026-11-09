@@ -32,3 +32,12 @@ Les données sont conservées **dans ce navigateur et ce profil**. Elles ne sont
 ## Déploiement
 
 `npm run build` produit `dist/`, déployable sur un hébergement statique. La configuration Vite utilise une base relative pour fonctionner dans un sous-répertoire.
+
+
+## Importer une collection Anki (.colpkg / .apkg)
+
+Dans **Paramètres → Importer une collection Anki**, sélectionne un fichier, vérifie l'aperçu puis confirme l'importation. L'analyse est effectuée localement dans le navigateur avec fflate, fzstd et sql.js (WebAssembly). Les decks et cartes existants ne sont pas supprimés. Réimporter le même fichier ignore les cartes portant le même identifiant Anki.
+
+Formats pris en charge : collections SQLite `collection.anki2`, `collection.anki21` et `collection.anki21b` (Zstandard). Modèles basiques et cloze, images courantes et audio pris en charge dans la mesure du possible. Les modèles personnalisés complexes, le CSS des modèles, certains médias et l'historique de révision Anki ne sont pas conservés. Taille maximale de l'archive : 250 Mo ; les médias individuels de plus de 12 Mo sont ignorés. Les médias intégrés augmentent l'espace utilisé par IndexedDB : exporte régulièrement une sauvegarde JSON.
+
+Après avoir récupéré la branche, exécute `npm install` pour actualiser les dépendances et le fichier `package-lock.json`, puis `npm run build`. L'importeur n'a pas encore été validé avec une batterie de fichiers Anki réels.
