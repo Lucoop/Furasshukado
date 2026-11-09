@@ -9,7 +9,7 @@ const THEME_STORAGE_KEY = "furasshukado:theme";
 function getInitialTheme(): boolean {
   try {
     const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return savedTheme === null ? true : savedTheme === "dark";
+    return savedTheme !== "light";
   } catch {
     // Keep dark mode as the default when browser storage is unavailable.
     return true;
