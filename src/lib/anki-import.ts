@@ -24,6 +24,53 @@ function render(template:string,fields:Record<string,string>,ord:number,answer:b
  out=out.replace(/\{\{([^}]+)\}\}/g,(_all,raw:string)=>{const parts=raw.split(':');const field=parts.pop()!.trim();const val=fields[field]??'';const modifier=parts.join(':').toLowerCase();if(modifier.includes('cloze'))return cloze(val,ord,answer);if(modifier.includes('type'))return '';if(modifier.includes('text'))return val.replace(/<[^>]*>/g,'');return val;});
  return out;
 }
+
+type ProtoValue = number | Uint8Array;
+function proto(bytes:Uint8Array):Map<number,ProtoValue[]>{
+ const out=new Map<number,ProtoValue[]>();let i=0;
+ const varint=()=>{let n=0,shift=0;while(i<bytes.length){const b=bytes[i++];n+=(b&127)*2**shift;if(!(b&128))return n;shift+=7;if(shift>56)throw Error('Protobuf invalide.');}throw Error('Protobuf tronqué.');};
+ while(i<bytes.length){const tag=varint(),field=Math.floor(tag/8),wire=tag%8;if(!field)throw Error('Champ Protobuf invalide.');
+ let value:ProtoValue;
+ if(wire===0)value=varint();
+ else if(wire===2){const len=varint();if(len<0||i+len>bytes.length)throw Error('Champ Protobuf incomplet.');value=bytes.subarray(i,i+len);i+=len;}
+ else if(wire===1||wire===5){const len=wire===1?8:4;if(i+len>bytes.length)throw Error('Champ Protobuf incomplet.');value=bytes.subarray(i,i+len);i+=len;}
+ else throw Error('Type Protobuf non pris en charge.');
+ out.set(field,[...(out.get(field)??[]),value]);
+ }
+ return out;
+}
+const bytesOf=(v:unknown):Uint8Array=>v instanceof Uint8Array?v:new Uint8Array();
+const protoBytes=(p:Map<number,ProtoValue[]>,f:number)=>bytesOf(p.get(f)?.[0]);
+const protoText=(p:Map<number,ProtoValue[]>,f:number)=>decode(protoBytes(p,f));
+const protoNumber=(p:Map<number,ProtoValue[]>,f:number)=>typeof p.get(f)?.[0]==='number'?p.get(f)![0] as number:0;
+function modernModels(rows:(query:string)=>Record<string,unknown>[]) {
+ const types=new Map<string,{type:number;flds:{name:string}[];tmpls:{qfmt:string;afmt:string}[]}>();
+ for(const n of rows('SELECT id, config FROM notetypes')){
+  const conf=proto(bytesOf(n.config));
+  types.set(String(n.id),{type:protoNumber(conf,1),flds:[],tmpls:[]});
+ }
+ for(const fld of rows('SELECT ntid, name, ord FROM fields ORDER BY ntid, ord')){
+  const nt=types.get(String(fld.ntid));if(nt)nt.flds[Number(fld.ord)]={name:String(fld.name)};
+ }
+ for(const tpl of rows('SELECT ntid, ord, config FROM templates ORDER BY ntid, ord')){
+  const nt=types.get(String(tpl.ntid));if(!nt)continue;
+  const conf=proto(bytesOf(tpl.config));nt.tmpls[Number(tpl.ord)]={qfmt:protoText(conf,1),afmt:protoText(conf,2)};
+ }
+ return Object.fromEntries(types);
+}
+function mediaEntries(archive:Record<string,Uint8Array>,modern:boolean):Record<string,string>{
+ const raw=archive.media;if(!raw)return {};
+ if(!modern)return JSON.parse(decode(raw)) as Record<string,string>;
+ const decoded=decompress(raw);
+ const outer=proto(decoded);
+ const index:Record<string,string>={};
+ (outer.get(1)??[]).forEach((item,i)=>{
+  const entry=proto(bytesOf(item));const name=protoText(entry,1);
+  if(name)index[String(protoNumber(entry,255)||i)]=name;
+ });
+ return index;
+}
+
 export async function inspectAnki(file:File):Promise<AnkiPreview>{
  if(!/\.(colpkg|apkg)$/i.test(file.name))throw Error('Choisis un fichier .colpkg ou .apkg.');
  if(file.size>LIMIT)throw Error('Archive trop volumineuse (limite : 250 Mo).');
@@ -38,19 +85,23 @@ export async function inspectAnki(file:File):Promise<AnkiPreview>{
  try {
   sql=new SQL.Database(bytes);
   const rows=(q:string)=>{const res=sql!.exec(q);return res.length?res[0].values.map(v=>Object.fromEntries(res[0].columns.map((k,i)=>[k,v[i]]))):[];};
-  const col=rows('SELECT decks, models FROM col LIMIT 1')[0];
+  const col=rows('SELECT ver, decks, models FROM col LIMIT 1')[0];
   if(!col)throw Error('Métadonnées de collection Anki introuvables.');
-  const deckMeta=JSON.parse(String(col.decks)) as Record<string,{name:string}>;
-  const models=JSON.parse(String(col.models)) as Record<string,{type?:number;flds:{name:string}[];tmpls:{qfmt:string;afmt:string}[]}>;
+  const modern=Number(col.ver)>=15;
+  const deckMeta:Record<string,{name:string}>=modern
+   ?Object.fromEntries(rows('SELECT id, name FROM decks').map(d=>[String(d.id),{name:String(d.name).replace(/\\x1f/g,'::')}]))
+   :JSON.parse(String(col.decks||'{}')) as Record<string,{name:string}>;
+  const models=modern?modernModels(rows):JSON.parse(String(col.models||'{}')) as Record<string,{type?:number;flds:{name:string}[];tmpls:{qfmt:string;afmt:string}[]}>;
   const notes=new Map(rows('SELECT id, mid, flds FROM notes').map(n=>[String(n.id),n]));
   const warnings:string[]=[];
   const media=new Map<string,string>();
-  if(archive.media){try{const index=JSON.parse(decode(archive.media)) as Record<string,string>;for(const [key,filename] of Object.entries(index)){
-   const blob=archive[key];const mime=mediaType(filename);
-   if(!blob||!mime)continue;
+  if(archive.media){try{const index=mediaEntries(archive,modern);for(const [key,filename] of Object.entries(index)){
+   let blob=archive[key];const mime=mediaType(filename);if(!blob||!mime)continue;
+   if(modern){try{blob=decompress(blob);}catch{warnings.push('Média Anki impossible à décompresser : '+filename);continue;}}
    if(blob.length>MAX_MEDIA){warnings.push('Média ignoré (plus de 12 Mo) : '+filename);continue;}
    media.set(filename,'data:'+mime+';base64,'+toBase64(blob));
   }}catch{warnings.push('Index des médias illisible : médias ignorés.');}}
+
   const decks=new Map<string,AnkiDeck>();
   let skipped=0;
   for(const c of rows('SELECT id, nid, did, ord FROM cards')){
