@@ -6,7 +6,9 @@ aliases:
   - Furasshukado
   - Shuka
 statut: "Référence de développement — version clarifiée"
-source: "Shuka(2).md"
+source: "Shuka(3).md"
+version: "3.0"
+mode: "Mise à jour cumulative : les exigences antérieures restent applicables sauf modification explicite"
 ---
 
 # Shuka — Cahier des charges fonctionnel
@@ -26,12 +28,20 @@ source: "Shuka(2).md"
 
 ### 2.1. Écrans demandés
 
-1. **Dashboard** — synthèse des révisions.
+1. **Dashboard** — synthèse des révisions et des lacunes.
 2. **Decks** — bibliothèque des decks et de leurs cartes.
 3. **Fiches** — notes ou notions détaillées, associées ou non à un deck.
 4. **Schéma** — notions regroupées hiérarchiquement par deck.
 5. **Graphe** — visualisation des liens entre **toutes** les flashcards, les fiches et leurs decks.
 6. **Lacunes** — difficultés identifiées à partir des résultats de révision.
+7. **Devoirs** — liste de devoirs avec échéances, états et liens vers les fiches ou les decks.
+
+### 2.1.1. Barre latérale flottante — exigence de Shuka(3).md
+
+- La barre latérale est **détachée du bord gauche**, de largeur compacte, et flotte **au milieu de la hauteur** sur ordinateur.
+- Les **seules entrées de navigation directement visibles** dans cette barre sont : **Dashboard, Decks, Devoirs, Graphe, Paramètres** (dans cet ordre).
+- Les écrans **Fiches, Schéma, Lacunes, Révisions et Statistiques** restent disponibles via la recherche Spotlight et des liens contextuels pertinents (Dashboard/Decks/Devoirs). Ils ne disparaissent pas.
+- En mode mobile, un accès compact et utilisable remplace cette barre sans masquer le contenu.
 
 La **révision** doit être immédiatement accessible depuis le Dashboard et depuis chaque deck. Les **paramètres**, sauvegardes et imports déjà existants restent accessibles ; ils ne remplacent aucun écran demandé.
 
@@ -55,6 +65,7 @@ Le Dashboard doit afficher :
 - **Calendrier d'activité** mettant en évidence les jours où au moins une carte a été révisée, à partir du véritable historique des révisions.
 - **Prochain deck à réviser**, avec son nom et sa **date/heure de prochaine échéance** ; si des cartes sont déjà dues, afficher « À réviser maintenant ».
 - **Bouton « Réviser »** déclenchant une vraie session de révision.
+- **Lacunes** : synthèse des cartes réellement difficiles, avec accès au détail. Pas de faux chiffres.
 
 En l'absence de deck ou de cartes dues, afficher un état vide clair, sans inventer de données.
 
@@ -123,12 +134,28 @@ La création, l'édition et la suppression des decks et des cartes doivent reste
 - Montrer les fiches associées et les cartes qui s'y rattachent.
 - Permettre de retrouver/ouvrir rapidement le deck concerné.
 
-### 7.3. Graphe
+### 7.3. Graphe — restriction explicite de Shuka(3).md
 
-- Représenter les liens **deck ↔ fiche ↔ flashcard**.
-- Toutes les données doivent être **accessibles**, y compris dans les grandes bibliothèques (filtrage, zoom, déplacement, développement progressif ou pagination autorisés).
-- Un graphe limité arbitrairement aux seuls premiers decks/cartes **ne satisfait pas** le besoin.
-- Un clic sur un élément doit permettre d'atteindre son contenu.
+- Le graphe présente **uniquement les fiches/notes qui disposent d’au moins une relation explicite**, ainsi que **les devoirs** ; il ne représente pas les decks, cartes ou vidéos comme des nœuds ordinaires.
+- Il affiche les liens **fiche ↔ fiche** et **fiche ↔ devoir**. Les relations vers une carte ou une vidéo rendent la fiche « liée », mais l’objet carte/vidéo est consultable dans la fiche plutôt que dans le graphe.
+- Les devoirs sans lien restent visibles en tant que nœuds indépendants.
+- Les grandes collections sont toutes accessibles (recherche, filtrage, navigation par pages/chargement progressif autorisés) ; aucun plafond fixe masquant des notes n’est acceptable.
+- Un clic ouvre la **fiche ou le devoir exact**.
+
+### 7.4. Liens entre connaissances (inspiration Obsidian)
+
+- Une fiche peut pointer vers une ou plusieurs autres fiches, vers des flashcards, vers un devoir et vers des **liens de vidéos externes**.
+- Les relations sont enregistrées **explicitement** en base locale, avec des identifiants stables ; le contenu ne dépend pas uniquement d’une mise en forme Markdown.
+- Dans une fiche, afficher et ouvrir les éléments liés ; la suppression d'un élément nettoie ses liens sans supprimer les autres contenus.
+- V1 : ajout/suppression de liens via une interface simple, sans obligation d'implémenter toute la syntaxe `[[wikilink]]` d’Obsidian.
+- V1 : URL de vidéo HTTP(S) enregistrée comme référence ; **pas de copie de la vidéo ni d’hébergement**.
+
+### 7.5. Devoirs
+
+- Créer, modifier et supprimer un devoir possédant un **titre**, une description facultative, une **échéance facultative**, un **statut** (à faire, en cours, terminé) et éventuellement un deck associé.
+- Associer une ou plusieurs fiches à un devoir pour les retrouver et pour afficher ces liens dans le graphe.
+- Les modifications de devoirs et de liens sont persistées dans IndexedDB ; suppression d'un devoir sans suppression des fiches liées.
+- Un devoir terminé reste consultable. L'interface doit permettre d'ouvrir un devoir depuis son nœud dans le graphe.
 
 ## 8. Lacunes
 
@@ -163,12 +190,22 @@ La création, l'édition et la suppression des decks et des cartes doivent reste
 - [ ] Une évaluation FSRS change la date d'échéance de façon persistante.
 - [ ] Les types de cartes, les tags et les numéros uniques fonctionnent sur les créations et modifications.
 - [ ] Une fiche peut être associée à un deck et à une carte ; une suppression de fiche conserve la carte.
-- [ ] Le Schéma et le Graphe permettent d'atteindre toutes les notions, sans coupure arbitraire.
+- [ ] Le Schéma permet d’atteindre toutes les notions. Le Graphe affiche **uniquement les fiches liées et les devoirs**, sans coupure arbitraire, et chaque nœud ouvre l’élément exact.
+- [ ] Les liens fiche ↔ fiche, fiche ↔ carte, fiche ↔ vidéo externe et fiche ↔ devoir sont créés et conservés après rechargement.
+- [ ] Un devoir peut être créé, modifié, terminé, relié à une fiche et supprimé sans perte des fiches associées.
+- [ ] La barre latérale flottante montre exactement les 5 entrées demandées ; les autres pages restent accessibles.
 - [ ] La page Lacunes montre de véritables difficultés issues des révisions.
 - [ ] Un import/export JSON conserve ces informations ; les anciennes sauvegardes restent importables.
 - [ ] La commande `npm run build` réussit sur la branche de développement.
 
-## 12. Points à préciser ultérieurement (non spécifiés dans la note d'origine)
+## 12. Fonctions assistées par IA — besoin exprimé dans Shuka(3).md
+
+- **Objectif confirmé** : pouvoir bénéficier de fonctions d’aide à l’étude par IA.
+- **Non encore défini par l’utilisateur** : fournisseur/modèle, connexion et gestion des clés, consentement à l’envoi de contenus, coût, actions exactes (génération de cartes, résumé, détection de lacunes...), mode hors ligne.
+- **Décision d’implémentation prudente** : garder une architecture permettant de brancher ultérieurement une fonction d’assistance IA, **sans affirmer qu’une IA est active** et sans envoyer silencieusement les notes privées vers un service distant. Les outils d’étude déjà disponibles continuent de fonctionner sans IA.
+- Des propositions d’actions envisageables (non validées) : créer des cartes à partir d’une fiche, résumer une vidéo transcrite ou proposer des pistes pour les lacunes. Elles nécessitent une décision explicite avant activation.
+
+## 13. Points à préciser ultérieurement (non spécifiés dans la note d'origine)
 
 Ces sujets ne sont **pas des exigences supplémentaires déjà décidées** :
 
@@ -180,4 +217,4 @@ Ces sujets ne sont **pas des exigences supplémentaires déjà décidées** :
 
 ---
 
-*Ce document reformule `Shuka(2).md` en exigences vérifiables. Les précisions ajoutées pour l'implémentation (comportements par défaut, tests, migration) sont explicitées pour éviter les interprétations silencieuses.*
+*Ce document reprend intégralement les exigences de la version précédente et intègre les évolutions de `Shuka(3).md`. Les choix nécessaires à une V1 testable sont signalés ; les choix de fournisseur IA restent ouverts.*
