@@ -115,21 +115,26 @@ function restoreNumbers<T extends {number?:number}>(rows:T[],minimum:number):{ro
 export async function importBackup(data:unknown){
  if(!data||typeof data!=='object')throw Error('Fichier invalide');
  const b=data as Record<string,unknown>;
- if(b.format!=='furasshukado'||![1,2].includes(Number(b.version))||!validRows(b.decks)||!validRows(b.folders)||!validRows(b.cards)||!validRows(b.reviews)||!validRows(b.logs)||(b.version===2&&!validRows(b.sheets)))throw Error('Format de sauvegarde non reconnu.');
+ if(b.format!=='furasshukado'||![1,2,3].includes(Number(b.version))||!validRows(b.decks)||!validRows(b.folders)||!validRows(b.cards)||!validRows(b.reviews)||!validRows(b.logs)||(Number(b.version)>=2&&!validRows(b.sheets))||(b.version===3&&(!validRows(b.homeworks)||!validRows(b.links))))throw Error('Format de sauvegarde non reconnu.');
  const required=(rows:Record<string,unknown>[],fields:string[])=>rows.every(r=>fields.every(f=>typeof r[f]==='string'));
  if(!required(b.decks,['id','title'])||!required(b.cards,['id','deckId','front','back'])||!required(b.folders,['id','name'])||!required(b.reviews,['cardId'])||!required(b.logs,['id','cardId','deckId']))throw Error('Données de sauvegarde incorrectes.');
- const sheets=b.version===2?b.sheets as Sheet[]:[];
- if(!required(sheets,['id','title']))throw Error('Fiches incorrectes dans la sauvegarde.');
+ const sheets=Number(b.version)>=2?b.sheets as Sheet[]:[];
+ const homeworks=b.version===3?b.homeworks as Homework[]:[];
+ const links=b.version===3?b.links as StudyLink[]:[];
+ if(!required(sheets,['id','title'])||!required(homeworks,['id','title','status'])||!required(links,['id','sourceId','targetId','targetType']))throw Error('Données des fiches, devoirs ou liens incorrectes.');
  const deckIds=new Set(b.decks.map(d=>d.id)),cardIds=new Set(b.cards.map(c=>c.id)),sheetIds=new Set(sheets.map(s=>s.id));
  if(b.cards.some(c=>!deckIds.has(c.deckId))||b.reviews.some(r=>!cardIds.has(String(r.cardId).replace(/::reverse$/,'')))||b.logs.some(l=>!cardIds.has(l.cardId)))throw Error('Références invalides dans la sauvegarde.');
- await db.transaction('rw',[db.decks,db.folders,db.cards,db.reviews,db.logs,db.sheets,db.sequences],async()=>{
+ const homeworkIds=new Set(homeworks.map(h=>h.id));
+ if(links.some(l=>!sheetIds.has(l.sourceId)||(l.targetType==='sheet'&&!sheetIds.has(l.targetId))||(l.targetType==='card'&&!cardIds.has(l.targetId))||(l.targetType==='homework'&&!homeworkIds.has(l.targetId))||(l.targetType==='video'&&!/^https?:\/\//i.test(l.targetId))||!['sheet','card','homework','video'].includes(l.targetType)))throw Error('Liens invalides dans la sauvegarde.');
+ await db.transaction('rw',[db.decks,db.folders,db.cards,db.reviews,db.logs,db.sheets,db.sequences,db.homeworks,db.links],async()=>{
   const existing=Object.fromEntries((await db.sequences.toArray()).map(c=>[c.name,c.value])) as Record<string,number>;
   const decks=restoreNumbers((b.decks as Deck[]).map(d=>({...d,tags:d.tags??[]})),existing.deck??0);
   const cards=restoreNumbers((b.cards as Flashcard[]).map(c=>({...c,tags:c.tags??[],cardType:c.cardType??'basic',sheetId:c.sheetId&&sheetIds.has(c.sheetId)?c.sheetId:null})),existing.card??0);
   const restoredSheets=restoreNumbers(sheets.map(f=>({...f,tags:f.tags??[],deckId:f.deckId&&deckIds.has(f.deckId)?f.deckId:null})),existing.sheet??0);
-  await Promise.all([db.decks.clear(),db.folders.clear(),db.cards.clear(),db.reviews.clear(),db.logs.clear(),db.sheets.clear()]);
-  await db.decks.bulkAdd(decks.rows);await db.folders.bulkAdd(b.folders as Folder[]);await db.cards.bulkAdd(cards.rows);await db.reviews.bulkAdd(b.reviews as Review[]);await db.logs.bulkAdd(b.logs as ReviewLog[]);await db.sheets.bulkAdd(restoredSheets.rows);
-  await db.sequences.bulkPut([{name:'deck',value:decks.last},{name:'card',value:cards.last},{name:'sheet',value:restoredSheets.last}]);
+  const restoredHomeworks=restoreNumbers(homeworks.map(h=>({...h,deckId:h.deckId&&deckIds.has(h.deckId)?h.deckId:null,dueAt:h.dueAt??null})),existing.homework??0);
+  await Promise.all([db.decks.clear(),db.folders.clear(),db.cards.clear(),db.reviews.clear(),db.logs.clear(),db.sheets.clear(),db.homeworks.clear(),db.links.clear()]);
+  await db.decks.bulkAdd(decks.rows);await db.folders.bulkAdd(b.folders as Folder[]);await db.cards.bulkAdd(cards.rows);await db.reviews.bulkAdd(b.reviews as Review[]);await db.logs.bulkAdd(b.logs as ReviewLog[]);await db.sheets.bulkAdd(restoredSheets.rows);await db.homeworks.bulkAdd(restoredHomeworks.rows);await db.links.bulkAdd(links);
+  await db.sequences.bulkPut([{name:'deck',value:decks.last},{name:'card',value:cards.last},{name:'sheet',value:restoredSheets.last},{name:'homework',value:restoredHomeworks.last}]);
  });
 }
 export function download(filename:string,text:string,mime='application/json'){const url=URL.createObjectURL(new Blob([text],{type:mime}));const a=document.createElement('a');a.href=url;a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);}
