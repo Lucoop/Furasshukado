@@ -13,26 +13,32 @@ export const normalizeTags=(input:string)=>[...new Set(input.split(/[,;]+/).map(
 export type FsrsState = Omit<FsrsCard,'due'|'last_review'> & {due:number;last_review:number|null};
 export type Review = { cardId:string; dueAt:number; interval:number; repetitions:number; lastRating:number|null; updatedAt:number; fsrs?:FsrsState };
 export type Sheet = {id:string;number:number;deckId:string|null;title:string;content:string;tags:string[];createdAt:number;updatedAt:number};
-export type Sequence = {name:'deck'|'card'|'sheet';value:number};
+export type HomeworkStatus='todo'|'doing'|'done';
+export type Homework={id:string;number:number;title:string;description:string;dueAt:number|null;status:HomeworkStatus;deckId:string|null;createdAt:number;updatedAt:number};
+export type StudyLink={id:string;sourceId:string;targetType:'sheet'|'card'|'homework'|'video';targetId:string;title?:string;url?:string;createdAt:number};
+export type Sequence = {name:'deck'|'card'|'sheet'|'homework';value:number};
 export type ReviewLog = { id:string; cardId:string; deckId:string; rating:number; reviewedAt:number };
-export type Backup = { format:'furasshukado'; version:2; exportedAt:string; decks:Deck[]; folders:Folder[]; cards:Flashcard[]; reviews:Review[]; logs:ReviewLog[]; sheets:Sheet[] };
+export type Backup = { format:'furasshukado'; version:3; exportedAt:string; decks:Deck[]; folders:Folder[]; cards:Flashcard[]; reviews:Review[]; logs:ReviewLog[]; sheets:Sheet[]; homeworks:Homework[]; links:StudyLink[] };
 class StudyDB extends Dexie {
- decks!:EntityTable<Deck,'id'>; folders!:EntityTable<Folder,'id'>; cards!:EntityTable<Flashcard,'id'>; reviews!:EntityTable<Review,'cardId'>; logs!:EntityTable<ReviewLog,'id'>; sheets!:EntityTable<Sheet,'id'>; sequences!:EntityTable<Sequence,'name'>;
+ decks!:EntityTable<Deck,'id'>; folders!:EntityTable<Folder,'id'>; cards!:EntityTable<Flashcard,'id'>; reviews!:EntityTable<Review,'cardId'>; logs!:EntityTable<ReviewLog,'id'>; sheets!:EntityTable<Sheet,'id'>; sequences!:EntityTable<Sequence,'name'>; homeworks!:EntityTable<Homework,'id'>; links!:EntityTable<StudyLink,'id'>;
  constructor(){super('furasshukado');this.version(1).stores({decks:'id,folderId,updatedAt',folders:'id',cards:'id,deckId,updatedAt',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt'});
  this.version(2).stores({decks:'id,folderId,updatedAt,*tags',folders:'id',cards:'id,deckId,updatedAt,number,*tags',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt'}).upgrade(async tx=>{
   let next=1;await tx.table('cards').toCollection().modify((card:Flashcard)=>{card.number=next++;card.cardType=card.cardType??'basic';card.tags=card.tags??[];});
   await tx.table('decks').toCollection().modify((deck:Deck)=>{deck.tags=deck.tags??[];});
  });
  this.version(3).stores({decks:'id,folderId,updatedAt,number,*tags',folders:'id',cards:'id,deckId,updatedAt,number,sheetId,*tags',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt',sheets:'id,number,deckId,updatedAt,*tags'}).upgrade(async tx=>{let n=1;await tx.table('decks').toCollection().modify((deck:Deck)=>{deck.number=deck.number??n++;});});
- this.version(4).stores({decks:'id,folderId,updatedAt,number,*tags',folders:'id',cards:'id,deckId,updatedAt,number,sheetId,*tags',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt',sheets:'id,number,deckId,updatedAt,*tags',sequences:'name'}).upgrade(async tx=>{for(const [name,table] of [['deck','decks'],['card','cards'],['sheet','sheets']] as const){const last=await tx.table(table).orderBy('number').last() as {number?:number}|undefined;await tx.table('sequences').put({name,value:last?.number??0});}});}
+ this.version(4).stores({decks:'id,folderId,updatedAt,number,*tags',folders:'id',cards:'id,deckId,updatedAt,number,sheetId,*tags',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt',sheets:'id,number,deckId,updatedAt,*tags',sequences:'name'}).upgrade(async tx=>{for(const [name,table] of [['deck','decks'],['card','cards'],['sheet','sheets']] as const){const last=await tx.table(table).orderBy('number').last() as {number?:number}|undefined;await tx.table('sequences').put({name,value:last?.number??0});}});
+ this.version(5).stores({decks:'id,folderId,updatedAt,number,*tags',folders:'id',cards:'id,deckId,updatedAt,number,sheetId,*tags',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt',sheets:'id,number,deckId,updatedAt,*tags',sequences:'name',homeworks:'id,number,deckId,dueAt,status,updatedAt',links:'id,sourceId,targetType,targetId,[targetType+targetId]'});}
 }
 export const db=new StudyDB();
 export const uid=()=>crypto.randomUUID();
 export const now=()=>Date.now();
-export async function claimNumber(name:Sequence['name']):Promise<number>{const row=await db.sequences.get(name);const table=name==='deck'?db.decks:name==='card'?db.cards:db.sheets;const last=await table.orderBy('number').last();const next=Math.max(row?.value??0,last?.number??0)+1;await db.sequences.put({name,value:next});return next;}
+export async function claimNumber(name:Sequence['name']):Promise<number>{const row=await db.sequences.get(name);const table=name==='deck'?db.decks:name==='card'?db.cards:name==='sheet'?db.sheets:db.homeworks;const last=await table.orderBy('number').last();const next=Math.max(row?.value??0,last?.number??0)+1;await db.sequences.put({name,value:next});return next;}
 export async function createDeck(title:string,description='',color='#ef9273',folderId:string|null=null,tags:string[]=[]){const t=title.trim();if(!t)throw Error('Le nom du deck est obligatoire.');return db.transaction('rw',db.decks,db.sequences,async()=>{const time=now(),number=await claimNumber('deck');const deck:Deck={id:uid(),number,title:t,description:description.trim(),color,folderId,tags,createdAt:time,updatedAt:time};await db.decks.add(deck);return deck;});}
 export async function updateDeck(deck:Deck){if(!deck.title.trim())throw Error('Le nom du deck est obligatoire.');await db.decks.put({...deck,title:deck.title.trim(),updatedAt:now()});}
-export async function deleteDeck(id:string){await db.transaction('rw',db.decks,db.cards,db.reviews,db.logs,db.sheets,async()=>{await db.sheets.where('deckId').equals(id).modify({deckId:null});const ids=(await db.cards.where('deckId').equals(id).primaryKeys()) as string[];await db.reviews.bulkDelete(ids.flatMap(x=>[x,x+'::reverse']));await db.logs.where('deckId').equals(id).delete();await db.cards.where('deckId').equals(id).delete();await db.decks.delete(id);});}
+export async function deleteDeck(id:string){await db.transaction('rw',[db.decks,db.cards,db.reviews,db.logs,db.sheets,db.homeworks,db.links],async()=>{await db.sheets.where('deckId').equals(id).modify({deckId:null});await db.homeworks.where('deckId').equals(id).modify({deckId:null});const ids=(await db.cards.where('deckId').equals(id).primaryKeys()) as string[];await db.reviews.bulkDelete(ids.flatMap(x=>[x,x+'::reverse']));await db.logs.where('deckId').equals(id).delete();await db.cards.where('deckId').equals(id).delete();
+ for(const cid of ids)await db.links.where('[targetType+targetId]').equals(['card',cid]).delete();
+ await db.decks.delete(id);});}
 export async function saveCard(card:Partial<Flashcard>&{deckId:string;front:string;back:string}){
  if(!card.front.trim()||!card.back.trim())throw Error('Le recto et le verso sont obligatoires.');
  return db.transaction('rw',db.decks,db.cards,db.reviews,db.sequences,async()=>{
@@ -44,7 +50,7 @@ export async function saveCard(card:Partial<Flashcard>&{deckId:string;front:stri
   await db.cards.put(c);return c;
  });
 }
-export async function deleteCard(id:string){await db.transaction('rw',db.cards,db.reviews,db.logs,async()=>{await db.cards.delete(id);await db.reviews.bulkDelete([id,id+'::reverse']);await db.logs.where('cardId').equals(id).delete();});}
+export async function deleteCard(id:string){await db.transaction('rw',[db.cards,db.reviews,db.logs,db.links],async()=>{await db.cards.delete(id);await db.reviews.bulkDelete([id,id+'::reverse']);await db.logs.where('cardId').equals(id).delete();await db.links.where('[targetType+targetId]').equals(['card',id]).delete();});}
 export async function rateCard(card:Flashcard,rating:number){
  if(![1,2,3,4].includes(rating))throw Error('Note invalide');
  const key=reviewKey(card);const old=await db.reviews.get(key);const time=now();
@@ -68,9 +74,38 @@ export async function saveSheet(input:{id?:string;deckId:string|null;title:strin
   await db.sheets.put(sheet);return sheet;
  });
 }
-export async function deleteSheet(id:string){await db.transaction('rw',db.sheets,db.cards,async()=>{await db.cards.where('sheetId').equals(id).modify({sheetId:null,sheetExcerpt:''});await db.sheets.delete(id);});}
+export async function deleteSheet(id:string){await db.transaction('rw',[db.sheets,db.cards,db.links],async()=>{await db.cards.where('sheetId').equals(id).modify({sheetId:null,sheetExcerpt:''});await db.links.where('sourceId').equals(id).delete();await db.links.where('[targetType+targetId]').equals(['sheet',id]).delete();await db.sheets.delete(id);});}
+export async function saveHomework(input:{id?:string;title:string;description:string;dueAt:number|null;status:HomeworkStatus;deckId:string|null;sheetIds:string[]}){
+ const title=input.title.trim();if(!title)throw Error('Le titre du devoir est obligatoire.');
+ if(!['todo','doing','done'].includes(input.status))throw Error('Statut du devoir invalide.');
+ if(input.dueAt!==null&&!Number.isFinite(input.dueAt))throw Error('Date du devoir invalide.');
+ return db.transaction('rw',[db.homeworks,db.sequences,db.links,db.sheets,db.decks],async()=>{
+  if(input.deckId&&!await db.decks.get(input.deckId))throw Error('Deck introuvable.');
+  const validSheets=await db.sheets.bulkGet(input.sheetIds);
+  if(validSheets.some(x=>!x))throw Error('Fiche associée introuvable.');
+  const previous=input.id?await db.homeworks.get(input.id):undefined;
+  const stamp=now(),id=input.id??uid(),number=previous?.number??await claimNumber('homework');
+  const record:Homework={id,number,title,description:input.description.trim(),dueAt:input.dueAt,status:input.status,deckId:input.deckId,createdAt:previous?.createdAt??stamp,updatedAt:stamp};
+  await db.homeworks.put(record);
+  await db.links.where('[targetType+targetId]').equals(['homework',id]).delete();
+  await db.links.bulkAdd([...new Set(input.sheetIds)].map(sourceId=>({id:uid(),sourceId,targetType:'homework' as const,targetId:id,createdAt:stamp})));
+  return record;
+ });
+}
+export async function deleteHomework(id:string){await db.transaction('rw',[db.homeworks,db.links],async()=>{await db.links.where('[targetType+targetId]').equals(['homework',id]).delete();await db.homeworks.delete(id);});}
+export async function createStudyLink(input:{sourceId:string;targetType:'sheet'|'card'|'video';targetId:string;title?:string;url?:string}){
+ if(!await db.sheets.get(input.sourceId))throw Error('Fiche source introuvable.');
+ if(input.targetType==='sheet'&&!await db.sheets.get(input.targetId))throw Error('Fiche cible introuvable.');
+ if(input.targetType==='card'&&!await db.cards.get(input.targetId))throw Error('Flashcard cible introuvable.');
+ if(input.targetType==='sheet'&&input.targetId===input.sourceId)throw Error('Une fiche ne peut pas se relier à elle-même.');
+ if(input.targetType==='video'){let parsed:URL;try{parsed=new URL(input.url??input.targetId);}catch{throw Error('URL de vidéo invalide.');}if(!['https:','http:'].includes(parsed.protocol))throw Error('Utilise une URL HTTP(S).');input.targetId=parsed.href;input.url=parsed.href;}
+ const duplicate=(await db.links.where('sourceId').equals(input.sourceId).toArray()).some(l=>l.targetType===input.targetType&&l.targetId===input.targetId);
+ if(duplicate)throw Error('Ce lien existe déjà.');
+ const link:StudyLink={id:uid(),sourceId:input.sourceId,targetType:input.targetType,targetId:input.targetId,title:input.title?.trim(),url:input.url,createdAt:now()};await db.links.add(link);return link;
+}
+export async function deleteStudyLink(id:string){await db.links.delete(id);}
 export async function getDueCards(deckId?:string){const source=deckId?await db.cards.where('deckId').equals(deckId).toArray():await db.cards.toArray();const cards=reviewVariants(source);const reviews=await db.reviews.bulkGet(cards.map(reviewKey));const time=now();return cards.filter((_,i)=>!reviews[i]||reviews[i]!.dueAt<=time);}
-export async function exportBackup():Promise<Backup>{const [decks,folders,cards,reviews,logs,sheets]=await Promise.all([db.decks.toArray(),db.folders.toArray(),db.cards.toArray(),db.reviews.toArray(),db.logs.toArray(),db.sheets.toArray()]);return{format:'furasshukado',version:2,exportedAt:new Date().toISOString(),decks,folders,cards,reviews,logs,sheets};}
+export async function exportBackup():Promise<Backup>{const [decks,folders,cards,reviews,logs,sheets,homeworks,links]=await Promise.all([db.decks.toArray(),db.folders.toArray(),db.cards.toArray(),db.reviews.toArray(),db.logs.toArray(),db.sheets.toArray(),db.homeworks.toArray(),db.links.toArray()]);return{format:'furasshukado',version:3,exportedAt:new Date().toISOString(),decks,folders,cards,reviews,logs,sheets,homeworks,links};}
 function validRows(x:unknown):x is Record<string,unknown>[] {return Array.isArray(x)&&x.every(y=>y!==null&&typeof y==='object'&&!Array.isArray(y));}
 function restoreNumbers<T extends {number?:number}>(rows:T[],minimum:number):{rows:(T&{number:number})[];last:number}{
  const used=new Set<number>();let last=Math.max(minimum,...rows.map(r=>Number.isSafeInteger(r.number)&&Number(r.number)>0?Number(r.number):0));
