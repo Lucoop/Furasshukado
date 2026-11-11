@@ -1,12 +1,13 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Plus, Pencil, Trash2, ArrowLeft, Search, FileText } from 'lucide-react';
 import { saveSheet, deleteSheet, normalizeTags, type Sheet, type Deck, type Flashcard } from '../lib/db';
 import { Markdown } from '../lib/markdown';
 
-export function SheetsView({sheets,decks,cards,onOpenDeck}:{sheets:Sheet[];decks:Deck[];cards:Flashcard[];onOpenDeck:(id:string)=>void}){
+export function SheetsView({sheets,decks,cards,focusId,onOpenDeck}:{sheets:Sheet[];decks:Deck[];cards:Flashcard[];focusId:string|null;onOpenDeck:(id:string)=>void}){
  const [editing,setEditing]=useState<Sheet|null>(null),[creating,setCreating]=useState(false),[query,setQuery]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [title,setTitle]=useState(''),[content,setContent]=useState(''),[deckId,setDeckId]=useState(''),[tags,setTags]=useState('');
  const open=(sheet?:Sheet)=>{setEditing(sheet??null);setCreating(true);setError('');setTitle(sheet?.title??'');setContent(sheet?.content??'');setDeckId(sheet?.deckId??'');setTags((sheet?.tags??[]).join(', '));};
+ useEffect(()=>{if(!focusId)return;const sheet=sheets.find(s=>s.id===focusId);if(sheet)open(sheet);},[focusId]);
  async function save(e:FormEvent){e.preventDefault();setBusy(true);setError('');try{await saveSheet({id:editing?.id,deckId:deckId||null,title,content,tags:normalizeTags(tags)});setCreating(false);}catch(x){setError(x instanceof Error?x.message:'Enregistrement impossible.');}finally{setBusy(false);}}
  async function remove(sheet:Sheet){if(!confirm('Supprimer cette fiche ? Les flashcards seront conservées, mais dissociées.'))return;try{await deleteSheet(sheet.id);}catch(x){setError(x instanceof Error?x.message:'Suppression impossible.');}}
  const filtered=sheets.filter(s=>(s.title+' '+s.content+' '+(s.tags??[]).join(' ')).toLowerCase().includes(query.toLowerCase())).sort((a,b)=>b.updatedAt-a.updatedAt);
