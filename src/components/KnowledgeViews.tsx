@@ -15,27 +15,35 @@ export function SchemaView({decks,cards,sheets,onDeck}:{decks:Deck[];cards:Flash
  </div>})}</div>
  {sheets.some(s=>!s.deckId)&&<div className="panel"><h3>Fiches indépendantes</h3>{sheets.filter(s=>!s.deckId).map(s=><p key={s.id}><FileText size={14}/> {s.title}</p>)}</div>}</section>;
 }
-type Node={id:string;label:string;x:number;y:number;kind:'deck'|'sheet'|'card';deckId?:string};
-export function GraphView({decks,cards,sheets,onDeck}:{decks:Deck[];cards:Flashcard[];sheets:Sheet[];onDeck:(id:string)=>void}){
- const [query,setQuery]=useState('');
- const selectedDecks=decks.filter(d=>d.title.toLowerCase().includes(query.toLowerCase())||!query).slice(0,12);
+type Node={id:string;label:string;x:number;y:number;kind:'deck'|'sheet'|'card';deckId?:string;cardId?:string;sheetId?:string};
+export function GraphView({decks,cards,sheets,onDeck,onCard,onSheet}:{decks:Deck[];cards:Flashcard[];sheets:Sheet[];onDeck:(id:string)=>void;onCard:(id:string)=>void;onSheet:(id:string)=>void}){
+ const [query,setQuery]=useState(''),[focusDeck,setFocusDeck]=useState<string|null>(null),[limit,setLimit]=useState(50);
+ const activeDeck=decks.find(d=>d.id===focusDeck);
+ const shownDecks=decks.filter(d=>!query||d.title.toLowerCase().includes(query.toLowerCase())||(d.tags??[]).some(t=>t.includes(query.toLowerCase())));
+ const deckCards=cards.filter(c=>c.deckId===focusDeck&&(!query||(c.front+' '+c.back+' '+(c.tags??[]).join(' ')).toLowerCase().includes(query.toLowerCase())));
+ const deckSheets=sheets.filter(s=>s.deckId===focusDeck&&(!query||(s.title+' '+s.content).toLowerCase().includes(query.toLowerCase())));
+ const visibleCards=deckCards.slice(0,limit),visibleSheets=deckSheets.slice(0,limit);
  const nodes:Node[]=[];const edges:{a:string;b:string}[]=[];
- selectedDecks.forEach((d,i)=>{const y=74+i*135;nodes.push({id:'d'+d.id,label:d.title,x:135,y,kind:'deck',deckId:d.id});
-  sheets.filter(s=>s.deckId===d.id).slice(0,4).forEach((s,j)=>{const sid='s'+s.id;nodes.push({id:sid,label:s.title,x:385,y:y-35+j*27,kind:'sheet',deckId:d.id});edges.push({a:'d'+d.id,b:sid});});
-  cards.filter(c=>c.deckId===d.id).slice(0,7).forEach((c,j)=>{const id='c'+c.id;nodes.push({id,label:'#'+(c.number??'')+' '+c.front.replace(/<[^>]*>/g,' ').slice(0,24),x:690,y:y-45+j*19,kind:'card',deckId:d.id});edges.push({a:'d'+d.id,b:id});if(c.sheetId&&nodes.some(n=>n.id==='s'+c.sheetId))edges.push({a:'s'+c.sheetId,b:id});});
- });
- const byId=new Map(nodes.map(n=>[n.id,n]));
- const height=Math.max(300,selectedDecks.length*135+100);
- return <section><div className="page-heading"><div><span className="eyebrow">CARTE DE CONNAISSANCES</span><h1>Graphe</h1><p>Vue interactive des liens entre decks, fiches et cartes.</p></div></div>
- <label className="search" style={{maxWidth:430}}><Search size={16}/><input placeholder="Filtrer les decks..." value={query} onChange={e=>setQuery(e.target.value)}/></label>
- <div className="graph-legend"><span>● Deck</span><span>■ Fiche</span><span>○ Flashcard</span><small>Vue limitée à 12 decks, 4 fiches et 7 cartes par deck pour rester lisible.</small></div>
- <div className="graph-scroller"><svg viewBox={`0 0 950 ${height}`} width="950" height={height} role="img" aria-label="Graphe des decks, fiches et flashcards">
-  {edges.map((e,i)=>{const a=byId.get(e.a),b=byId.get(e.b);return a&&b?<line key={i} x1={a.x+70} y1={a.y} x2={b.x-70} y2={b.y} stroke="var(--border)" strokeWidth="1.6"/>:null;})}
-  {nodes.map(n=><g key={n.id} role="button" tabIndex={0} onClick={()=>n.deckId&&onDeck(n.deckId)} onKeyDown={e=>{if(e.key==='Enter'&&n.deckId)onDeck(n.deckId);}} style={{cursor:'pointer'}}>
-   <rect x={n.x-84} y={n.y-14} width="168" height="29" rx="7" fill={n.kind==='deck'?'var(--accent)':'var(--panel2)'} stroke="var(--border)"/>
-   <text x={n.x} y={n.y+4} textAnchor="middle" fill={n.kind==='deck'?'var(--accent-text)':'var(--text)'} fontSize="11">{n.label.slice(0,27)}</text>
-  </g>)}
- </svg></div>{!decks.length&&<p className="muted"><Network size={16}/> Crée des decks pour afficher le graphe.</p>}</section>;
+ if(!activeDeck){nodes.push({id:'root',label:'Shuka',x:90,y:Math.max(80,shownDecks.length*33),kind:'deck'});shownDecks.forEach((d,i)=>{const key='d'+d.id;nodes.push({id:key,label:'#'+(d.number??'—')+' '+d.title,x:440,y:65+i*66,kind:'deck',deckId:d.id});edges.push({a:'root',b:key});});}
+ else{
+  const total=Math.max(visibleCards.length,visibleSheets.length,1),center=60+total*22;
+  nodes.push({id:'d'+activeDeck.id,label:activeDeck.title,x:108,y:center,kind:'deck',deckId:activeDeck.id});
+  visibleSheets.forEach((f,i)=>{const key='s'+f.id;nodes.push({id:key,label:f.title,x:390,y:60+i*48,kind:'sheet',sheetId:f.id});edges.push({a:'d'+activeDeck.id,b:key});});
+  visibleCards.forEach((c,i)=>{const key='c'+c.id;nodes.push({id:key,label:'#'+(c.number??'—')+' '+c.front.replace(/<[^>]*>/g,' ').slice(0,23),x:740,y:60+i*44,kind:'card',cardId:c.id});const parent=c.sheetId&&nodes.some(n=>n.id==='s'+c.sheetId)?'s'+c.sheetId:'d'+activeDeck.id;edges.push({a:parent,b:key});});
+ }
+ const byId=new Map(nodes.map(n=>[n.id,n]));const height=Math.max(270,...nodes.map(n=>n.y+95));
+ const select=(n:Node)=>{if(n.cardId)onCard(n.cardId);else if(n.sheetId)onSheet(n.sheetId);else if(n.deckId){setFocusDeck(n.deckId);setQuery('');setLimit(50);}};
+ return <section><div className="page-heading"><div><span className="eyebrow">CARTE DE CONNAISSANCES</span><h1>Graphe</h1><p>Explore les relations entre les decks, fiches et flashcards, sans exclure les dernières cartes.</p></div></div>
+ <div className="action-row" style={{marginBottom:14}}><button className="btn secondary" onClick={()=>{setFocusDeck(null);setQuery('');}}>Tous les decks</button>{activeDeck&&<><span style={{alignSelf:'center'}}>#{activeDeck.number} {activeDeck.title}</span><button className="btn secondary" onClick={()=>onDeck(activeDeck.id)}>Ouvrir le deck</button></>}</div>
+ <label className="search" style={{maxWidth:430}}><Search size={16}/><input placeholder={activeDeck?'Filtrer cartes et fiches...':'Rechercher un deck...'} value={query} onChange={e=>{setQuery(e.target.value);setLimit(50);}}/></label>
+ <div className="graph-legend"><span>● Deck</span><span>■ Fiche</span><span>○ Flashcard</span><small>{activeDeck?`${deckCards.length} carte(s), ${deckSheets.length} fiche(s) — chargement progressif`:`${shownDecks.length} deck(s) accessible(s)`}</small></div>
+ <div className="graph-scroller"><svg viewBox={`0 0 950 ${height}`} width="950" height={height} role="img" aria-label="Graphe interactif des decks, fiches et cartes">
+ {edges.map((e,i)=>{const a=byId.get(e.a),b=byId.get(e.b);return a&&b?<line key={i} x1={a.x+83} y1={a.y} x2={b.x-83} y2={b.y} stroke="var(--border)" strokeWidth="1.5"/>:null;})}
+ {nodes.map(n=><g key={n.id} role={n.id==='root'?'img':'button'} tabIndex={n.id==='root'?-1:0} onClick={()=>select(n)} onKeyDown={e=>{if(e.key==='Enter')select(n);}} style={{cursor:n.id==='root'?'default':'pointer'}}><rect x={n.x-83} y={n.y-15} width="166" height="30" rx="7" fill={n.kind==='deck'?'var(--accent)':'var(--panel2)'} stroke="var(--border)"/><text x={n.x} y={n.y+4} textAnchor="middle" fill={n.kind==='deck'?'var(--accent-text)':'var(--text)'} fontSize="11">{n.label.slice(0,26)}</text></g>)}
+ </svg></div>
+ {activeDeck&&(deckCards.length>visibleCards.length||deckSheets.length>visibleSheets.length)&&<button className="btn secondary" style={{marginTop:16}} onClick={()=>setLimit(v=>v+50)}>Afficher la suite ({Math.max(deckCards.length-visibleCards.length,deckSheets.length-visibleSheets.length)} restantes)</button>}
+ {!decks.length&&<p className="muted"><Network size={16}/> Crée des decks pour afficher le graphe.</p>}
+ </section>;
 }
 export function GapsView({decks,cards,reviews,logs,onDeck}:{decks:Deck[];cards:Flashcard[];reviews:Review[];logs:ReviewLog[];onDeck:(id:string)=>void}){
  const map=new Map(reviews.map(r=>[r.cardId,r]));
