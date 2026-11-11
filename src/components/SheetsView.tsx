@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Plus, Pencil, Trash2, ArrowLeft, Search, FileText } from 'lucide-react';
-import { db, saveSheet, deleteSheet, normalizeTags, type Sheet, type Deck, type Flashcard } from '../lib/db';
+import { saveSheet, deleteSheet, normalizeTags, type Sheet, type Deck, type Flashcard } from '../lib/db';
 import { Markdown } from '../lib/markdown';
 
 export function SheetsView({sheets,decks,cards,onOpenDeck}:{sheets:Sheet[];decks:Deck[];cards:Flashcard[];onOpenDeck:(id:string)=>void}){
