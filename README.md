@@ -1,4 +1,4 @@
-# Furasshukado
+# Shuka (anciennement Furasshukado)
 
 Plateforme de flashcards **100 % locale**, sans compte ni serveur. Les decks, cartes, révisions et statistiques sont enregistrés dans IndexedDB via Dexie.
 
@@ -24,6 +24,21 @@ Ouvrir l'adresse indiquée par Vite. Vérifier la compilation avec `npm run buil
 - Export/import de sauvegarde JSON complète (remplacement après confirmation).
 - Export/import CSV des cartes d'un deck (en-têtes `front,back`).
 - Thème sombre par défaut, préférence conservée dans localStorage.
+
+## Cahier des charges Shuka — version actuelle
+
+- Interface discrète et minimaliste, thème sombre par défaut.
+- Recherche universelle type Spotlight dans les decks, les cartes et les tags : **Ctrl/Cmd + K**, flèches et Entrée.
+- Historique de navigation en haut de la page pour revenir à un deck ou menu récent (conservé pendant la session d'application).
+- Dashboard : calendrier de 12 semaines basé sur les réponses de révision, prochain deck à réviser et accès immédiat aux révisions.
+- Révisions : deck et type affichés, carte retournable au clic, compteurs de nouvelles cartes / apprentissage / révisions, quatre évaluations.
+- Flashcards : tags, numéro unique attribué à la création, types **recto→verso**, **verso→recto**, **deux sens** et **traduction**.
+- Decks : tags et filtrage via la recherche globale.
+- Création rapide : depuis un deck, **N** ouvre la création de carte ; **Ctrl/Cmd + Entrée** enregistre le formulaire.
+
+Les cartes « deux sens » présentent les deux orientations dans la même session ; elles partagent actuellement une seule échéance de révision. La traduction utilise les champs recto/verso, sans correction automatique de texte. Le calendrier représente l'historique local, pas une synchronisation multi-appareils.
+
+**Évolution de stockage :** le nom interne IndexedDB `furasshukado` est volontairement conservé pour ne pas perdre les données déjà enregistrées. Les anciennes cartes et decks sont enrichis lors de la migration de schéma vers la version 2.
 
 ## Stockage et confidentialité
 
