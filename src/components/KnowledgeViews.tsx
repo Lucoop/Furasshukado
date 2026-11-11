@@ -3,17 +3,17 @@ import { BookOpen, FileText, ArrowRight, Network, Search } from 'lucide-react';
 import type { Deck, Flashcard, Sheet, Review, ReviewLog } from '../lib/db';
 import { cardTypeNames } from '../lib/db';
 
-export function SchemaView({decks,cards,sheets,onDeck}:{decks:Deck[];cards:Flashcard[];sheets:Sheet[];onDeck:(id:string)=>void}){
+export function SchemaView({decks,cards,sheets,onDeck,onCard,onSheet}:{decks:Deck[];cards:Flashcard[];sheets:Sheet[];onDeck:(id:string)=>void;onCard:(id:string)=>void;onSheet:(id:string)=>void}){
  const [query,setQuery]=useState(''),[expanded,setExpanded]=useState<string[]>([]);
  const toggle=(id:string)=>setExpanded(old=>old.includes(id)?old.filter(x=>x!==id):[...old,id]);
  return <section><div className="page-heading"><div><span className="eyebrow">STRUCTURE DES CONNAISSANCES</span><h1>Schéma</h1><p>Notions et flashcards regroupées par deck.</p></div></div><label className="search" style={{maxWidth:430}}><Search size={17}/><input placeholder="Filtrer les notions..." value={query} onChange={e=>setQuery(e.target.value)}/></label>
  <div className="schema-list">{decks.filter(d=>(d.title+' '+cards.filter(c=>c.deckId===d.id).map(c=>c.front).join(' ')+' '+sheets.filter(s=>s.deckId===d.id).map(s=>s.title).join(' ')).toLowerCase().includes(query.toLowerCase())).map(d=>{const dc=cards.filter(c=>c.deckId===d.id),ds=sheets.filter(s=>s.deckId===d.id);const show=expanded.includes(d.id)||Boolean(query);return <div className="schema-deck" key={d.id}>
   <button className="schema-header" onClick={()=>toggle(d.id)} aria-expanded={show}><BookOpen size={18}/><strong>#{d.number??'—'} {d.title}</strong><span>{ds.length} fiches · {dc.length} cartes</span><span>{show?'−':'+'}</span></button>
-  {show&&<div className="schema-content">{ds.map(s=><div className="schema-sheet" key={s.id}><span className="schema-title"><FileText size={16}/> {s.title}</span>{dc.filter(c=>c.sheetId===s.id).map(c=><button className="schema-card" key={c.id} onClick={()=>onDeck(d.id)}><ArrowRight size={14}/> #{c.number} · {c.front.replace(/<[^>]*>/g,' ').slice(0,115)}</button>)}</div>)}
-  {dc.filter(c=>!c.sheetId||!ds.some(s=>s.id===c.sheetId)).map(c=><button className="schema-card" key={c.id} onClick={()=>onDeck(d.id)}><ArrowRight size={14}/> #{c.number} · {c.front.replace(/<[^>]*>/g,' ').slice(0,115)}</button>)}
+  {show&&<div className="schema-content">{ds.map(s=><div className="schema-sheet" key={s.id}><button className="schema-title" onClick={()=>onSheet(s.id)}><FileText size={16}/> {s.title}</button>{dc.filter(c=>c.sheetId===s.id).map(c=><button className="schema-card" key={c.id} onClick={()=>onCard(c.id)}><ArrowRight size={14}/> #{c.number} · {c.front.replace(/<[^>]*>/g,' ').slice(0,115)}</button>)}</div>)}
+  {dc.filter(c=>!c.sheetId||!ds.some(s=>s.id===c.sheetId)).map(c=><button className="schema-card" key={c.id} onClick={()=>onCard(c.id)}><ArrowRight size={14}/> #{c.number} · {c.front.replace(/<[^>]*>/g,' ').slice(0,115)}</button>)}
   {!ds.length&&!dc.length&&<p className="muted">Ce deck ne contient pas encore de notions.</p>}</div>}
  </div>})}</div>
- {sheets.some(s=>!s.deckId)&&<div className="panel"><h3>Fiches indépendantes</h3>{sheets.filter(s=>!s.deckId).map(s=><p key={s.id}><FileText size={14}/> {s.title}</p>)}</div>}</section>;
+ {sheets.some(s=>!s.deckId)&&<div className="panel"><h3>Fiches indépendantes</h3>{sheets.filter(s=>!s.deckId).map(s=><button className="schema-card" key={s.id} onClick={()=>onSheet(s.id)}><FileText size={14}/> {s.title}</button>)}</div>}</section>;
 }
 type Node={id:string;label:string;x:number;y:number;kind:'deck'|'sheet'|'card';deckId?:string;cardId?:string;sheetId?:string};
 export function GraphView({decks,cards,sheets,onDeck,onCard,onSheet}:{decks:Deck[];cards:Flashcard[];sheets:Sheet[];onDeck:(id:string)=>void;onCard:(id:string)=>void;onSheet:(id:string)=>void}){
@@ -45,11 +45,11 @@ export function GraphView({decks,cards,sheets,onDeck,onCard,onSheet}:{decks:Deck
  {!decks.length&&<p className="muted"><Network size={16}/> Crée des decks pour afficher le graphe.</p>}
  </section>;
 }
-export function GapsView({decks,cards,reviews,logs,onDeck}:{decks:Deck[];cards:Flashcard[];reviews:Review[];logs:ReviewLog[];onDeck:(id:string)=>void}){
+export function GapsView({decks,cards,reviews,logs,onCard}:{decks:Deck[];cards:Flashcard[];reviews:Review[];logs:ReviewLog[];onCard:(id:string)=>void}){
  const map=new Map(reviews.map(r=>[r.cardId,r]));
  const gaps=cards.map(c=>{const l=logs.filter(x=>x.cardId===c.id).sort((a,b)=>b.reviewedAt-a.reviewedAt).slice(0,8);const failures=l.filter(x=>x.rating<=2).length;return {card:c,failures,total:l.length,lastRating:map.get(c.id)?.lastRating,interval:map.get(c.id)?.interval??0};}).filter(x=>x.failures>0||(x.lastRating!==null&&x.lastRating!==undefined&&x.lastRating<=2)).sort((a,b)=>b.failures-a.failures||a.interval-b.interval);
  return <section><div className="page-heading"><div><span className="eyebrow">POINTS À RENFORCER</span><h1>Lacunes</h1><p>Les cartes que tu as le plus souvent jugées difficiles.</p></div></div>
  <div className="stats-grid"><div className="metric"><strong>{gaps.length}</strong><span>Cartes à renforcer</span></div><div className="metric"><strong>{logs.filter(l=>l.rating<=2).length}</strong><span>Réponses difficiles</span></div><div className="metric"><strong>{cards.length}</strong><span>Cartes au total</span></div></div>
- <div className="gap-list">{gaps.map(({card,failures,total})=><button className="gap-item" key={card.id} onClick={()=>onDeck(card.deckId)}><span className="gap-icon"><BookOpen size={18}/></span><span><strong>#{card.number} · {card.front.replace(/<[^>]*>/g,' ').slice(0,140)}</strong><small>{decks.find(d=>d.id===card.deckId)?.title??'Deck inconnu'} · {cardTypeNames[card.cardType??'basic']}</small></span><span className="gap-score">{failures}/{total} difficiles</span><ArrowRight size={17}/></button>)}</div>
+ <div className="gap-list">{gaps.map(({card,failures,total})=><button className="gap-item" key={card.id} onClick={()=>onCard(card.id)}><span className="gap-icon"><BookOpen size={18}/></span><span><strong>#{card.number} · {card.front.replace(/<[^>]*>/g,' ').slice(0,140)}</strong><small>{decks.find(d=>d.id===card.deckId)?.title??'Deck inconnu'} · {cardTypeNames[card.cardType??'basic']}</small></span><span className="gap-score">{failures}/{total} difficiles</span><ArrowRight size={17}/></button>)}</div>
  {!gaps.length&&<div className="panel"><h3>Aucune lacune détectée</h3><p>Les cartes évaluées « À revoir » ou « Difficile » apparaîtront ici.</p></div>}</section>;
 }
