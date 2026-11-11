@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Plus, Pencil, Trash2, ArrowLeft, Search, FileText } from 'lucide-react';
-import { saveSheet, deleteSheet, normalizeTags, type Sheet, type Deck, type Flashcard } from '../lib/db';
+import { saveSheet, deleteSheet, normalizeTags, type Sheet, type Deck, type Flashcard, type Homework, type StudyLink } from '../lib/db';
 import { Markdown } from '../lib/markdown';
+import { SheetLinks } from './SheetLinks';
 
-export function SheetsView({sheets,decks,cards,focusId,onOpenDeck}:{sheets:Sheet[];decks:Deck[];cards:Flashcard[];focusId:string|null;onOpenDeck:(id:string)=>void}){
+export function SheetsView({sheets,decks,cards,homeworks,links,focusId,onOpenDeck,onOpenCard,onOpenHomework}:{sheets:Sheet[];decks:Deck[];cards:Flashcard[];homeworks:Homework[];links:StudyLink[];focusId:string|null;onOpenDeck:(id:string)=>void;onOpenCard:(id:string)=>void;onOpenHomework:(id:string)=>void}){
  const [editing,setEditing]=useState<Sheet|null>(null),[creating,setCreating]=useState(false),[query,setQuery]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
  const [title,setTitle]=useState(''),[content,setContent]=useState(''),[deckId,setDeckId]=useState(''),[tags,setTags]=useState('');
  const open=(sheet?:Sheet)=>{setEditing(sheet??null);setCreating(true);setError('');setTitle(sheet?.title??'');setContent(sheet?.content??'');setDeckId(sheet?.deckId??'');setTags((sheet?.tags??[]).join(', '));};
@@ -20,8 +21,9 @@ export function SheetsView({sheets,decks,cards,focusId,onOpenDeck}:{sheets:Sheet
    {error&&<p role="alert" className="warning">{error}</p>}
    <div className="action-row"><button className="btn primary" disabled={busy||!title.trim()}>{busy?'Enregistrement…':'Enregistrer'}</button><button type="button" className="btn secondary" onClick={()=>setCreating(false)}>Annuler</button></div>
   </form>
+  {editing&&<SheetLinks sheetId={editing.id} sheets={sheets} cards={cards} homeworks={homeworks} links={links} onSheet={id=>{const other=sheets.find(x=>x.id===id);if(other)open(other);}} onCard={onOpenCard} onHomework={onOpenHomework}/>}
  </section>;
- return <section><div className="page-heading"><div><span className="eyebrow">NOTIONS ET COURS</span><h1>Fiches</h1><p>Écris une notion une fois, relie-la à tes flashcards.</p></div><button className="btn primary" onClick={()=>open()}><Plus size={16}/> Nouvelle fiche</button></div>
+ return <section><div className="page-heading"><div><span className="eyebrow">NOTIONS ET COURS</span><h1>Fiches</h1><p>Écris une notion une fois et relie-la à tes fiches, cartes, devoirs et vidéos.</p></div><button className="btn primary" onClick={()=>open()}><Plus size={16}/> Nouvelle fiche</button></div>
  <label className="search" style={{maxWidth:460,marginBottom:20}}><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Rechercher une fiche..."/></label>
  {error&&<p className="warning" role="alert">{error}</p>}
  <div className="sheet-grid">{filtered.map(s=>{const related=cards.filter(c=>c.sheetId===s.id);return <article className="panel sheet-tile" key={s.id}>
