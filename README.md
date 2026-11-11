@@ -25,7 +25,7 @@ Ouvrir l'adresse indiquée par Vite. Vérifier la compilation avec `npm run buil
 - Fiches Markdown reliées aux decks et cartes, vue Schéma, Graphe navigable (chargement progressif) et Lacunes basées sur les réponses.
 - Tags, identifiants uniques durables et quatre types de flashcards ; raccourcis de révision Espace et 1–4.
 - Tableau de bord et statistiques issues de l'historique.
-- Export/import de sauvegarde JSON complète (version 2, également compatible avec les sauvegardes version 1 ; remplacement après confirmation).
+- Export/import de sauvegarde JSON complète (version 3, compatible avec les anciennes sauvegardes versions 1 et 2 ; remplacement après confirmation).
 - Export/import CSV des cartes d'un deck (en-têtes `front,back`).
 - Thème sombre par défaut, préférence conservée dans localStorage.
 
@@ -49,6 +49,20 @@ Les cartes « deux sens » présentent les deux orientations dans la même sessi
 Le cahier des charges clarifié et ses critères de validation se trouvent dans [docs/SHUKA_SPEC.md](docs/SHUKA_SPEC.md).
 
 Les types **traduction** et **deux sens** utilisent pour l'instant l'auto-évaluation. Leurs deux orientations peuvent être planifiées séparément par FSRS. La restauration d'une ancienne sauvegarde attribue les numéros manquants. Le nom interne IndexedDB reste `furasshukado` afin de conserver les données existantes après le renommage de l'application.
+
+## Spécification évolutive
+
+Le cahier des charges consolidé est **[docs/SHUKA_SPEC.md](docs/SHUKA_SPEC.md)** (version 3, issue des exigences de `Shuka(3).md`). Chaque nouvelle note utilisateur doit être comparée à ce fichier, fusionnée sans perdre les exigences précédentes, puis implémentée avec vérification de compilation.
+
+### Évolution V3
+
+- **Barre latérale flottante** au milieu de la gauche sur ordinateur : Dashboard, Decks, Devoirs, Graphe et Paramètres. Les autres écrans (Fiches, Schéma, Lacunes, Révisions, Statistiques) restent accessibles via la recherche Spotlight `Ctrl/Cmd+K` et les accès rapides du Dashboard.
+- **Devoirs** : création, modification, échéance, statut, deck associé et fiches liées. Les devoirs terminés restent consultables.
+- **Liens entre connaissances** : ouvre une fiche existante puis ajoute des liens vers d'autres fiches, des flashcards, des devoirs ou une vidéo externe (HTTP/HTTPS). Les fiches sont consultables depuis ces relations et les liens sont persistés localement.
+- **Graphe** : n'affiche plus les decks et les flashcards comme nœuds. Il montre seulement les **fiches liées** et **tous les devoirs**, avec navigation progressive pour les grandes collections. Les vidéos et flashcards liées se consultent depuis la fiche correspondante.
+- **Dashboard** : affiche un aperçu des lacunes fondées sur les réponses réellement évaluées.
+- **Sauvegardes JSON V3** : comprennent désormais les devoirs, les fiches, les liens explicites et les états de révision. Importation toujours compatible avec les versions V1 et V2.
+- **Intelligence artificielle** : souhaitée dans la vision produit, mais aucun fournisseur, tarif, stockage de clé ni transfert de données personnelles n'est encore décidé. Cette version ne prétend pas fournir une fonction IA connectée.
 
 ## Stockage et confidentialité
 
