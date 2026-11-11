@@ -1,0 +1,42 @@
+import 'fake-indexeddb/auto';
+import { test, expect } from 'vitest';
+import { db, createDeck, saveCard, saveSheet, saveHomework, createStudyLink, deleteSheet, deleteHomework, deleteCard, rateCard, exportBackup, importBackup } from './db';
+
+test('Shuka local-first: persistent decks, flashcards, homework, links, FSRS and JSON backup', async () => {
+ const deck=await createDeck('Mathématiques','Cours de révision');
+ const sheet=await saveSheet({deckId:deck.id,title:'Théorème de Pythagore',content:'$a^2+b^2=c^2$',tags:['maths']});
+ const card=await saveCard({deckId:deck.id,front:'Que dit le théorème ?',back:'a²+b²=c²',sheetId:sheet.id});
+ const hw=await saveHomework({title:'Faire les exercices',description:'Chapitre 1',status:'todo',dueAt:Date.now()+86400000,deckId:deck.id,sheetIds:[sheet.id]});
+ expect((await db.links.where('[targetType+targetId]').equals(['homework',hw.id]).count())).toBe(1);
+ const video=await createStudyLink({sourceId:sheet.id,targetType:'video',targetId:'https://example.org/watch?v=1',title:'Tutoriel'});
+ expect(video.url).toContain('https://example.org/');
+ const related=await createStudyLink({sourceId:sheet.id,targetType:'card',targetId:card.id});
+ expect(related.targetId).toBe(card.id);
+ expect((await db.homeworks.get(hw.id))?.status).toBe('todo');
+ await rateCard(card,3);
+ const state=await db.reviews.get(card.id);
+ expect(state?.fsrs).toBeDefined();
+ expect(state?.dueAt).toBeGreaterThan(0);
+ const backup=await exportBackup();
+ expect(backup.version).toBe(3);
+ expect(backup.homeworks).toHaveLength(1);
+ expect(backup.links).toHaveLength(3);
+ await importBackup(backup);
+ expect((await db.cards.get(card.id))?.sheetId).toBe(sheet.id);
+ expect((await db.reviews.get(card.id))?.fsrs).toBeDefined();
+ await deleteSheet(sheet.id);
+ expect((await db.cards.get(card.id))?.sheetId).toBeNull();
+ expect((await db.homeworks.get(hw.id))?.id).toBe(hw.id);
+ expect(await db.links.count()).toBe(0);
+ await deleteHomework(hw.id);
+ expect(await db.homeworks.count()).toBe(0);
+ await deleteCard(card.id);
+ const next=await saveCard({deckId:deck.id,front:'Deuxième question',back:'Deuxième réponse'});
+ expect(next.number).toBeGreaterThan(card.number??0);
+ // Legacy JSON V2 must still be restorable without destroying the local-first schema.
+ const legacy={...backup,version:2} as unknown;
+ await importBackup(legacy);
+ expect((await db.cards.get(card.id))?.sheetId).toBe(sheet.id);
+ expect(await db.homeworks.count()).toBe(0);
+ await db.delete();
+});
