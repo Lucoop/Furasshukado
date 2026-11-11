@@ -19,9 +19,13 @@ Ouvrir l'adresse indiquée par Vite. Vérifier la compilation avec `npm run buil
 - Organiser les decks dans des dossiers.
 - Éditer les cartes en Markdown et LaTeX (`$...$`, `$$...$$`) avec aperçu.
 - Réviser un deck ou tous les decks et noter chaque réponse.
-- Planification simple des prochaines révisions (pas FSRS pour l'instant).
+- Planification des révisions par **FSRS** (Again / Hard / Good / Easy), avec état sauvegardé pour chaque orientation des cartes « deux sens ».
+- Dashboard avec calendrier réel des révisions, prochain deck à réviser et date d'échéance.
+- Recherche rapide façon Spotlight (`Ctrl/Cmd + K`) sur decks, fiches et cartes ; historique limité aux trois emplacements précédents.
+- Fiches Markdown reliées aux decks et cartes, vue Schéma, Graphe navigable (chargement progressif) et Lacunes basées sur les réponses.
+- Tags, identifiants uniques durables et quatre types de flashcards ; raccourcis de révision Espace et 1–4.
 - Tableau de bord et statistiques issues de l'historique.
-- Export/import de sauvegarde JSON complète (remplacement après confirmation).
+- Export/import de sauvegarde JSON complète (version 2, également compatible avec les sauvegardes version 1 ; remplacement après confirmation).
 - Export/import CSV des cartes d'un deck (en-têtes `front,back`).
 - Thème sombre par défaut, préférence conservée dans localStorage.
 
@@ -39,6 +43,12 @@ Ouvrir l'adresse indiquée par Vite. Vérifier la compilation avec `npm run buil
 Les cartes « deux sens » présentent les deux orientations dans la même session ; elles partagent actuellement une seule échéance de révision. La traduction utilise les champs recto/verso, sans correction automatique de texte. Le calendrier représente l'historique local, pas une synchronisation multi-appareils.
 
 **Évolution de stockage :** le nom interne IndexedDB `furasshukado` est volontairement conservé pour ne pas perdre les données déjà enregistrées. Les anciennes cartes et decks sont enrichis lors de la migration de schéma vers la version 2.
+
+## Référence fonctionnelle
+
+Le cahier des charges clarifié et ses critères de validation se trouvent dans [docs/SHUKA_SPEC.md](docs/SHUKA_SPEC.md).
+
+Les types **traduction** et **deux sens** utilisent pour l'instant l'auto-évaluation. Leurs deux orientations peuvent être planifiées séparément par FSRS. La restauration d'une ancienne sauvegarde attribue les numéros manquants. Le nom interne IndexedDB reste `furasshukado` afin de conserver les données existantes après le renommage de l'application.
 
 ## Stockage et confidentialité
 
