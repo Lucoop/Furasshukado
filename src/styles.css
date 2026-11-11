@@ -96,3 +96,66 @@ kbd{font-family:inherit;font-size:11px;color:var(--muted);padding:2px 5px;border
 .linked-sheet{font-size:11px;color:var(--muted);margin-top:10px;border-left:2px solid var(--border);padding-left:8px}
 .linked-sheet p{margin:4px 0}
 @media(max-width:800px){.sheet-meta-fields,.sheet-editor-columns{grid-template-columns:1fr}.gap-score{display:none}}
+
+
+/* Shuka v3: detached, compact mid-left navigation */
+.sidebar{position:fixed;left:20px;top:50%;transform:translateY(-50%);width:189px;min-width:189px;height:auto;max-height:calc(100dvh - 38px);padding:17px 10px;border:1px solid var(--border);border-radius:17px;box-shadow:0 16px 45px #0004;overflow-y:auto;overscroll-behavior:contain;z-index:40}
+.sidebar .brand{margin-bottom:22px;padding:0 6px}
+.sidebar .brand strong{font-size:16px}
+.sidebar .brand small{font-size:9px}
+.sidebar .nav-label{padding:0 10px}
+.sidebar nav{gap:5px}
+.sidebar .nav-item{padding:11px 10px;gap:10px;border-radius:9px}
+.sidebar-bottom{margin-top:20px}
+.sidebar .storage-info{font-size:10px;line-height:1.4;padding:13px 5px}
+.main{margin-left:218px}
+.shuka-tools{display:flex;flex-wrap:wrap;gap:9px;margin:15px 0}
+.shuka-tools button{display:flex;align-items:center;gap:7px;border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:8px;padding:9px 12px;font:inherit;font-size:12px}
+.shuka-tools button:hover{background:var(--panel2)}
+.gap-preview{margin:26px 0 18px}
+.gap-preview .section-head{margin:0 0 12px}
+.gap-preview-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 6px;border:0;border-bottom:1px solid var(--border);background:transparent;color:var(--text);width:100%;text-align:left;font-size:12px}
+.gap-preview-row:last-child{border-bottom:0}
+.gap-preview-row:hover{background:var(--panel2)}
+.gap-preview-row>span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.gap-preview-row small{flex-shrink:0;color:var(--muted)}
+.homework-list{display:grid;gap:12px;margin-top:18px}
+.homework-card{display:grid;gap:12px}
+.homework-card h3{margin:5px 0;font-size:18px}
+.homework-title{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.hw-status{border-radius:8px;background:var(--panel2);border:1px solid var(--border);padding:6px 10px;font-size:11px}
+.hw-status.done{color:#84bd9d}.hw-status.doing{color:#f0bb86}
+.homework-meta{display:flex;flex-wrap:wrap;gap:14px;color:var(--muted);font-size:12px}
+.homework-meta span{display:flex;gap:6px;align-items:center}
+.homework-meta .late{color:#eb9696}
+.homework-related{display:flex;flex-wrap:wrap;gap:8px}
+.homework-related button{display:flex;align-items:center;gap:5px;background:var(--panel2);color:var(--text);padding:7px 9px;border-radius:7px;border:1px solid var(--border);font-size:12px}
+.homework-filters{display:flex;flex-wrap:wrap;gap:8px}
+.homework-form{display:grid;gap:17px;max-width:980px}
+.homework-form>label,.homework-fields>label{display:grid;gap:7px;font-size:13px;color:var(--muted)}
+.homework-form input:not([type=checkbox]),.homework-form select,.homework-form textarea{background:var(--panel2);color:var(--text);border:1px solid var(--border);padding:11px;border-radius:8px;width:100%;font:inherit}
+.homework-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.homework-sheet-picker{border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--muted)}
+.homework-sheet-picker legend{font-size:12px;font-weight:600}
+.homework-sheet-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;max-height:190px;overflow-y:auto}
+.homework-sheet-options label{display:flex;align-items:center;gap:8px;color:var(--text);font-size:12px}
+.homework-sheet-options input{accent-color:var(--accent)}
+.relation-editor{margin:20px 0;padding:18px;background:var(--panel);border:1px solid var(--border);border-radius:12px}
+.relation-editor h3{display:flex;align-items:center;gap:7px;margin:0;font-size:17px}
+.relation-editor p{font-size:12px}
+.relation-add{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.relation-add select,.relation-add input{min-width:160px;flex:1;padding:10px;border-radius:8px;background:var(--panel2);border:1px solid var(--border);color:var(--text);font:inherit;font-size:12px}
+.relation-items{display:grid;gap:8px;margin-top:12px}
+.relation-item{display:flex;align-items:center;gap:10px;min-height:37px;border:1px solid var(--border);border-radius:8px;background:var(--panel2);padding:7px 10px;color:var(--text);font-size:12px}
+.relation-item>button:not(.relation-remove),.relation-item>a{flex:1;min-width:0;display:flex;align-items:center;gap:6px;text-align:left;border:none;background:none;color:var(--text);font:inherit;text-decoration:none;cursor:pointer;overflow:hidden;text-overflow:ellipsis}
+.relation-item.backlink{width:100%;text-align:left;cursor:pointer}
+.relation-remove{margin-left:auto;background:none;border:none;color:var(--muted)}
+.graph-scroller svg g:focus rect{stroke:var(--accent);stroke-width:2.5}
+@media(max-width:900px){
+ .sidebar{width:194px;min-width:194px;left:12px;top:50%;transform:translate(-135%,-50%);height:auto;max-height:calc(100dvh - 24px);border-radius:14px}
+ .sidebar.show{transform:translate(0,-50%);left:12px}
+ .main{margin-left:0}
+ .mobile-toggle{display:inline-flex}
+ .homework-fields{grid-template-columns:1fr}
+}
+@media(max-width:650px){.homework-sheet-options{grid-template-columns:1fr}.gap-preview-row{align-items:flex-start;flex-direction:column}.homework-title{align-items:flex-start}}
