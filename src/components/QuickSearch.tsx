@@ -8,8 +8,8 @@ export function QuickSearch({decks,cards,onDeck,onCard,onAdd,onReview}:{decks:De
  const results=useMemo(()=>{
   const q=query.toLowerCase().trim();const matches=(s:string)=>!q||s.toLowerCase().includes(q);
   const actions:Result[]=[{key:'new',title:'Créer un deck',detail:'Action rapide',icon:'action',action:onAdd},{key:'review',title:'Commencer une révision',detail:'Action rapide',icon:'action',action:onReview}];
-  const ds:Result[]=decks.filter(d=>matches(d.title+' '+(d.tags??[]).join(' '))).map(d=>({key:'d'+d.id,title:d.title,detail:'Deck · '+(d.tags??[]).join(', '),icon:'deck',action:()=>onDeck(d.id)}));
-  const cs:Result[]=cards.filter(c=>matches(c.front+' '+c.back+' '+(c.tags??[]).join(' '))).slice(0,15).map(c=>({key:'c'+c.id,title:c.front.replace(/<[^>]*>/g,' ').slice(0,90),detail:'Flashcard #'+(c.number??'—'),icon:'card',action:()=>onCard(c.deckId)}));
+  const ds:Result[]=decks.filter(d=>matches(d.title+' '+(d.tags??[]).join(' '))).map(d=>({key:'d'+d.id,title:d.title,detail:'Deck · '+(d.tags??[]).join(', '),icon:'deck' as const,action:()=>onDeck(d.id)}));
+  const cs:Result[]=cards.filter(c=>matches(c.front+' '+c.back+' '+(c.tags??[]).join(' '))).slice(0,15).map(c=>({key:'c'+c.id,title:c.front.replace(/<[^>]*>/g,' ').slice(0,90),detail:'Flashcard #'+(c.number??'—'),icon:'card' as const,action:()=>onCard(c.deckId)}));
   return [...actions.filter(a=>matches(a.title)),...ds,...cs].slice(0,25);
  },[query,decks,cards,onDeck,onCard,onAdd,onReview]);
  const choose=(item:Result)=>{item.action();setOpen(false);setQuery('');setActive(0);};
