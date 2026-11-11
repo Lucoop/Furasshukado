@@ -2,10 +2,10 @@ import Dexie, { type EntityTable } from 'dexie';
 import { createEmptyCard, fsrs, Rating, type Card as FsrsCard } from 'ts-fsrs';
 const scheduler=fsrs({request_retention:0.9,maximum_interval:36500,enable_short_term:true});
 
-export type Deck = { id:string; title:string; description:string; color:string; folderId:string|null; tags?:string[]; number?:number; sheetId?:string|null; sheetExcerpt?:string; createdAt:number; updatedAt:number };
+export type Deck = { id:string; title:string; description:string; color:string; folderId:string|null; tags?:string[]; number?:number; createdAt:number; updatedAt:number };
 export type Folder = { id:string; name:string; createdAt:number };
 export type CardType = 'basic'|'reverse'|'both'|'translation';
-export type Flashcard = { id:string; deckId:string; front:string; back:string; tags?:string[]; cardType?:CardType; number?:number; createdAt:number; updatedAt:number };
+export type Flashcard = { id:string; deckId:string; front:string; back:string; tags?:string[]; cardType?:CardType; number?:number; sheetId?:string|null; sheetExcerpt?:string; createdAt:number; updatedAt:number };
 export const cardTypeNames:Record<CardType,string>={basic:'Recto → verso',reverse:'Verso → recto',both:'Recto ↔ verso',translation:'Traduction'};
 export const normalizeTags=(input:string)=>[...new Set(input.split(/[,;]+/).map(s=>s.trim().toLowerCase()).filter(Boolean))].slice(0,24);
 export type FsrsState = Omit<FsrsCard,'due'|'last_review'> & {due:number;last_review:number|null};
