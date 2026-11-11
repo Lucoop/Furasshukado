@@ -1,22 +1,31 @@
 import Dexie, { type EntityTable } from 'dexie';
 
-export type Deck = { id:string; title:string; description:string; color:string; folderId:string|null; createdAt:number; updatedAt:number };
+export type Deck = { id:string; title:string; description:string; color:string; folderId:string|null; tags?:string[]; createdAt:number; updatedAt:number };
 export type Folder = { id:string; name:string; createdAt:number };
-export type Flashcard = { id:string; deckId:string; front:string; back:string; createdAt:number; updatedAt:number };
+export type CardType = 'basic'|'reverse'|'both'|'translation';
+export type Flashcard = { id:string; deckId:string; front:string; back:string; tags?:string[]; cardType?:CardType; number?:number; createdAt:number; updatedAt:number };
+export const cardTypeNames:Record<CardType,string>={basic:'Recto → verso',reverse:'Verso → recto',both:'Recto ↔ verso',translation:'Traduction'};
+export const normalizeTags=(input:string)=>[...new Set(input.split(/[,;]+/).map(s=>s.trim().toLowerCase()).filter(Boolean))].slice(0,24);
 export type Review = { cardId:string; dueAt:number; interval:number; repetitions:number; lastRating:number|null; updatedAt:number };
 export type ReviewLog = { id:string; cardId:string; deckId:string; rating:number; reviewedAt:number };
 export type Backup = { format:'furasshukado'; version:1; exportedAt:string; decks:Deck[]; folders:Folder[]; cards:Flashcard[]; reviews:Review[]; logs:ReviewLog[] };
 class StudyDB extends Dexie {
  decks!:EntityTable<Deck,'id'>; folders!:EntityTable<Folder,'id'>; cards!:EntityTable<Flashcard,'id'>; reviews!:EntityTable<Review,'cardId'>; logs!:EntityTable<ReviewLog,'id'>;
- constructor(){super('furasshukado');this.version(1).stores({decks:'id,folderId,updatedAt',folders:'id',cards:'id,deckId,updatedAt',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt'});}
+ constructor(){super('furasshukado');this.version(1).stores({decks:'id,folderId,updatedAt',folders:'id',cards:'id,deckId,updatedAt',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt'});
+ this.version(2).stores({decks:'id,folderId,updatedAt,*tags',folders:'id',cards:'id,deckId,updatedAt,number,*tags',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt'}).upgrade(async tx=>{
+  let next=1;await tx.table('cards').toCollection().modify((card:Flashcard)=>{card.number=next++;card.cardType=card.cardType??'basic';card.tags=card.tags??[];});
+  await tx.table('decks').toCollection().modify((deck:Deck)=>{deck.tags=deck.tags??[];});
+ });}
 }
 export const db=new StudyDB();
 export const uid=()=>crypto.randomUUID();
 export const now=()=>Date.now();
-export async function createDeck(title:string,description='',color='#ef9273',folderId:string|null=null){const t=title.trim();if(!t)throw Error('Le nom du deck est obligatoire.');const time=now();const deck:Deck={id:uid(),title:t,description:description.trim(),color,folderId,createdAt:time,updatedAt:time};await db.decks.add(deck);return deck;}
+export async function createDeck(title:string,description='',color='#ef9273',folderId:string|null=null,tags:string[]=[]){const t=title.trim();if(!t)throw Error('Le nom du deck est obligatoire.');const time=now();const deck:Deck={id:uid(),title:t,description:description.trim(),color,folderId,tags,createdAt:time,updatedAt:time};await db.decks.add(deck);return deck;}
 export async function updateDeck(deck:Deck){if(!deck.title.trim())throw Error('Le nom du deck est obligatoire.');await db.decks.put({...deck,title:deck.title.trim(),updatedAt:now()});}
 export async function deleteDeck(id:string){await db.transaction('rw',db.decks,db.cards,db.reviews,db.logs,async()=>{const ids=(await db.cards.where('deckId').equals(id).primaryKeys()) as string[];await db.reviews.bulkDelete(ids);await db.logs.where('deckId').equals(id).delete();await db.cards.where('deckId').equals(id).delete();await db.decks.delete(id);});}
-export async function saveCard(card:Partial<Flashcard>&{deckId:string;front:string;back:string}){if(!card.front.trim()||!card.back.trim())throw Error('Le recto et le verso sont obligatoires.');if(!await db.decks.get(card.deckId))throw Error('Deck introuvable.');const time=now();const c:Flashcard={id:card.id??uid(),deckId:card.deckId,front:card.front.trim(),back:card.back.trim(),createdAt:card.createdAt??time,updatedAt:time};await db.cards.put(c);return c;}
+export async function saveCard(card:Partial<Flashcard>&{deckId:string;front:string;back:string}){if(!card.front.trim()||!card.back.trim())throw Error('Le recto et le verso sont obligatoires.');if(!await db.decks.get(card.deckId))throw Error('Deck introuvable.');const time=now();const existing=card.id?await db.cards.get(card.id):undefined;
+ const nextNumber=card.number??existing?.number??Math.max(0,...(await db.cards.toArray()).map(c=>c.number??0))+1;
+ const c:Flashcard={id:card.id??uid(),deckId:card.deckId,front:card.front.trim(),back:card.back.trim(),tags:card.tags??existing?.tags??[],cardType:card.cardType??existing?.cardType??'basic',number:nextNumber,createdAt:card.createdAt??existing?.createdAt??time,updatedAt:time};await db.cards.put(c);return c;}
 export async function deleteCard(id:string){await db.transaction('rw',db.cards,db.reviews,db.logs,async()=>{await db.cards.delete(id);await db.reviews.delete(id);await db.logs.where('cardId').equals(id).delete();});}
 export async function rateCard(card:Flashcard,rating:number){if(![1,2,3,4].includes(rating))throw Error('Note invalide');const old=await db.reviews.get(card.id);const rep=rating===1?0:(old?.repetitions??0)+1;const interval=rating===1?0:rating===2?Math.max(1,Math.round((old?.interval||1)*1.3)):rating===3?Math.max(1,Math.round((old?.interval||1)*2.5)):Math.max(3,Math.round((old?.interval||1)*4));const time=now();await db.transaction('rw',db.reviews,db.logs,async()=>{await db.reviews.put({cardId:card.id,dueAt:time+(rating===1?60_000:interval*86400_000),interval,repetitions:rep,lastRating:rating,updatedAt:time});await db.logs.add({id:uid(),cardId:card.id,deckId:card.deckId,rating,reviewedAt:time});});}
 export async function getDueCards(deckId?:string){const cards=deckId?await db.cards.where('deckId').equals(deckId).toArray():await db.cards.toArray();const reviews=await db.reviews.bulkGet(cards.map(c=>c.id));const time=now();return cards.filter((_,i)=>!reviews[i]||reviews[i]!.dueAt<=time);}
