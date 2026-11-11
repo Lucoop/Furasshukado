@@ -125,15 +125,16 @@ export async function inspectAnki(file:File):Promise<AnkiPreview>{
 }
 export async function commitAnki(preview:AnkiPreview):Promise<{decks:number;cards:number;skipped:number}>{
  let addedDecks=0,addedCards=0,skipped=0;
- await db.transaction('rw',db.decks,db.cards,async()=>{
-  let nextNumber=(await db.cards.orderBy('number').last())?.number??0;
-  let nextDeckNumber=(await db.decks.orderBy('number').last())?.number??0;
+ await db.transaction('rw',db.decks,db.cards,db.sequences,async()=>{
+  let nextNumber=Math.max((await db.cards.orderBy('number').last())?.number??0,(await db.sequences.get('card'))?.value??0);
+  let nextDeckNumber=Math.max((await db.decks.orderBy('number').last())?.number??0,(await db.sequences.get('deck'))?.value??0);
   for(const source of preview.decks){
    const id='anki-deck:'+source.id;
    const existing=await db.decks.get(id);
    if(!existing){const time=now();const deck:Deck={id,number:++nextDeckNumber,title:source.name,description:'Importé depuis Anki',color:'#8b9cfa',folderId:null,tags:[],createdAt:time,updatedAt:time};await db.decks.add(deck);addedDecks++;}
    for(const card of source.cards){if(await db.cards.get(card.id)){skipped++;continue;}await db.cards.add({...card,deckId:id,number:++nextNumber,cardType:card.cardType??'basic',tags:card.tags??[]});addedCards++;}
   }
+  await db.sequences.bulkPut([{name:'card',value:nextNumber},{name:'deck',value:nextDeckNumber}]);
  });
  return {decks:addedDecks,cards:addedCards,skipped};
 }
