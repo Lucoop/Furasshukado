@@ -93,10 +93,11 @@ export async function saveHomework(input:{id?:string;title:string;description:st
  });
 }
 export async function deleteHomework(id:string){await db.transaction('rw',[db.homeworks,db.links],async()=>{await db.links.where('[targetType+targetId]').equals(['homework',id]).delete();await db.homeworks.delete(id);});}
-export async function createStudyLink(input:{sourceId:string;targetType:'sheet'|'card'|'video';targetId:string;title?:string;url?:string}){
+export async function createStudyLink(input:{sourceId:string;targetType:'sheet'|'card'|'homework'|'video';targetId:string;title?:string;url?:string}){
  if(!await db.sheets.get(input.sourceId))throw Error('Fiche source introuvable.');
  if(input.targetType==='sheet'&&!await db.sheets.get(input.targetId))throw Error('Fiche cible introuvable.');
  if(input.targetType==='card'&&!await db.cards.get(input.targetId))throw Error('Flashcard cible introuvable.');
+ if(input.targetType==='homework'&&!await db.homeworks.get(input.targetId))throw Error('Devoir cible introuvable.');
  if(input.targetType==='sheet'&&input.targetId===input.sourceId)throw Error('Une fiche ne peut pas se relier à elle-même.');
  if(input.targetType==='video'){let parsed:URL;try{parsed=new URL(input.url??input.targetId);}catch{throw Error('URL de vidéo invalide.');}if(!['https:','http:'].includes(parsed.protocol))throw Error('Utilise une URL HTTP(S).');input.targetId=parsed.href;input.url=parsed.href;}
  const duplicate=(await db.links.where('sourceId').equals(input.sourceId).toArray()).some(l=>l.targetType===input.targetType&&l.targetId===input.targetId);
