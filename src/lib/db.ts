@@ -13,26 +13,37 @@ export const normalizeTags=(input:string)=>[...new Set(input.split(/[,;]+/).map(
 export type FsrsState = Omit<FsrsCard,'due'|'last_review'> & {due:number;last_review:number|null};
 export type Review = { cardId:string; dueAt:number; interval:number; repetitions:number; lastRating:number|null; updatedAt:number; fsrs?:FsrsState };
 export type Sheet = {id:string;number:number;deckId:string|null;title:string;content:string;tags:string[];createdAt:number;updatedAt:number};
+export type Sequence = {name:'deck'|'card'|'sheet';value:number};
 export type ReviewLog = { id:string; cardId:string; deckId:string; rating:number; reviewedAt:number };
 export type Backup = { format:'furasshukado'; version:2; exportedAt:string; decks:Deck[]; folders:Folder[]; cards:Flashcard[]; reviews:Review[]; logs:ReviewLog[]; sheets:Sheet[] };
 class StudyDB extends Dexie {
- decks!:EntityTable<Deck,'id'>; folders!:EntityTable<Folder,'id'>; cards!:EntityTable<Flashcard,'id'>; reviews!:EntityTable<Review,'cardId'>; logs!:EntityTable<ReviewLog,'id'>; sheets!:EntityTable<Sheet,'id'>;
+ decks!:EntityTable<Deck,'id'>; folders!:EntityTable<Folder,'id'>; cards!:EntityTable<Flashcard,'id'>; reviews!:EntityTable<Review,'cardId'>; logs!:EntityTable<ReviewLog,'id'>; sheets!:EntityTable<Sheet,'id'>; sequences!:EntityTable<Sequence,'name'>;
  constructor(){super('furasshukado');this.version(1).stores({decks:'id,folderId,updatedAt',folders:'id',cards:'id,deckId,updatedAt',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt'});
  this.version(2).stores({decks:'id,folderId,updatedAt,*tags',folders:'id',cards:'id,deckId,updatedAt,number,*tags',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt'}).upgrade(async tx=>{
   let next=1;await tx.table('cards').toCollection().modify((card:Flashcard)=>{card.number=next++;card.cardType=card.cardType??'basic';card.tags=card.tags??[];});
   await tx.table('decks').toCollection().modify((deck:Deck)=>{deck.tags=deck.tags??[];});
  });
- this.version(3).stores({decks:'id,folderId,updatedAt,number,*tags',folders:'id',cards:'id,deckId,updatedAt,number,sheetId,*tags',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt',sheets:'id,number,deckId,updatedAt,*tags'}).upgrade(async tx=>{let n=1;await tx.table('decks').toCollection().modify((deck:Deck)=>{deck.number=deck.number??n++;});});}
+ this.version(3).stores({decks:'id,folderId,updatedAt,number,*tags',folders:'id',cards:'id,deckId,updatedAt,number,sheetId,*tags',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt',sheets:'id,number,deckId,updatedAt,*tags'}).upgrade(async tx=>{let n=1;await tx.table('decks').toCollection().modify((deck:Deck)=>{deck.number=deck.number??n++;});});
+ this.version(4).stores({decks:'id,folderId,updatedAt,number,*tags',folders:'id',cards:'id,deckId,updatedAt,number,sheetId,*tags',reviews:'cardId,dueAt',logs:'id,cardId,deckId,reviewedAt',sheets:'id,number,deckId,updatedAt,*tags',sequences:'name'}).upgrade(async tx=>{for(const [name,table] of [['deck','decks'],['card','cards'],['sheet','sheets']] as const){const last=await tx.table(table).orderBy('number').last() as {number?:number}|undefined;await tx.table('sequences').put({name,value:last?.number??0});}});}
 }
 export const db=new StudyDB();
 export const uid=()=>crypto.randomUUID();
 export const now=()=>Date.now();
-export async function createDeck(title:string,description='',color='#ef9273',folderId:string|null=null,tags:string[]=[]){const t=title.trim();if(!t)throw Error('Le nom du deck est obligatoire.');const time=now();const number=((await db.decks.orderBy('number').last())?.number??0)+1;const deck:Deck={id:uid(),number,title:t,description:description.trim(),color,folderId,tags,createdAt:time,updatedAt:time};await db.decks.add(deck);return deck;}
+export async function claimNumber(name:Sequence['name']):Promise<number>{const row=await db.sequences.get(name);const table=name==='deck'?db.decks:name==='card'?db.cards:db.sheets;const last=await table.orderBy('number').last();const next=Math.max(row?.value??0,last?.number??0)+1;await db.sequences.put({name,value:next});return next;}
+export async function createDeck(title:string,description='',color='#ef9273',folderId:string|null=null,tags:string[]=[]){const t=title.trim();if(!t)throw Error('Le nom du deck est obligatoire.');return db.transaction('rw',db.decks,db.sequences,async()=>{const time=now(),number=await claimNumber('deck');const deck:Deck={id:uid(),number,title:t,description:description.trim(),color,folderId,tags,createdAt:time,updatedAt:time};await db.decks.add(deck);return deck;});}
 export async function updateDeck(deck:Deck){if(!deck.title.trim())throw Error('Le nom du deck est obligatoire.');await db.decks.put({...deck,title:deck.title.trim(),updatedAt:now()});}
 export async function deleteDeck(id:string){await db.transaction('rw',db.decks,db.cards,db.reviews,db.logs,db.sheets,async()=>{await db.sheets.where('deckId').equals(id).modify({deckId:null});const ids=(await db.cards.where('deckId').equals(id).primaryKeys()) as string[];await db.reviews.bulkDelete(ids.flatMap(x=>[x,x+'::reverse']));await db.logs.where('deckId').equals(id).delete();await db.cards.where('deckId').equals(id).delete();await db.decks.delete(id);});}
-export async function saveCard(card:Partial<Flashcard>&{deckId:string;front:string;back:string}){if(!card.front.trim()||!card.back.trim())throw Error('Le recto et le verso sont obligatoires.');if(!await db.decks.get(card.deckId))throw Error('Deck introuvable.');const time=now();const existing=card.id?await db.cards.get(card.id):undefined;
- const nextNumber=card.number??existing?.number??((await db.cards.orderBy('number').last())?.number??0)+1;
- const c:Flashcard={id:card.id??uid(),deckId:card.deckId,front:card.front.trim(),back:card.back.trim(),tags:card.tags??existing?.tags??[],cardType:card.cardType??existing?.cardType??'basic',number:nextNumber,sheetId:card.sheetId!==undefined?card.sheetId:existing?.sheetId??null,sheetExcerpt:card.sheetExcerpt??existing?.sheetExcerpt??'',createdAt:card.createdAt??existing?.createdAt??time,updatedAt:time};await db.cards.put(c);return c;}
+export async function saveCard(card:Partial<Flashcard>&{deckId:string;front:string;back:string}){
+ if(!card.front.trim()||!card.back.trim())throw Error('Le recto et le verso sont obligatoires.');
+ return db.transaction('rw',db.decks,db.cards,db.reviews,db.sequences,async()=>{
+  if(!await db.decks.get(card.deckId))throw Error('Deck introuvable.');
+  const time=now(),existing=card.id?await db.cards.get(card.id):undefined;
+  const number=card.number??existing?.number??await claimNumber('card');
+  const c:Flashcard={id:card.id??uid(),deckId:card.deckId,front:card.front.trim(),back:card.back.trim(),tags:card.tags??existing?.tags??[],cardType:card.cardType??existing?.cardType??'basic',number,sheetId:card.sheetId!==undefined?card.sheetId:existing?.sheetId??null,sheetExcerpt:card.sheetExcerpt??existing?.sheetExcerpt??'',createdAt:card.createdAt??existing?.createdAt??time,updatedAt:time};
+  if(existing?.cardType==='both'&&c.cardType!=='both')await db.reviews.delete(c.id+'::reverse');
+  await db.cards.put(c);return c;
+ });
+}
 export async function deleteCard(id:string){await db.transaction('rw',db.cards,db.reviews,db.logs,async()=>{await db.cards.delete(id);await db.reviews.bulkDelete([id,id+'::reverse']);await db.logs.where('cardId').equals(id).delete();});}
 export async function rateCard(card:Flashcard,rating:number){
  if(![1,2,3,4].includes(rating))throw Error('Note invalide');
@@ -49,11 +60,13 @@ export async function rateCard(card:Flashcard,rating:number){
 }
 export async function saveSheet(input:{id?:string;deckId:string|null;title:string;content:string;tags:string[]}){
  const title=input.title.trim();if(!title)throw Error('Le titre de la fiche est obligatoire.');
- const existing=input.id?await db.sheets.get(input.id):undefined;
- if(input.deckId&&!await db.decks.get(input.deckId))throw Error('Deck introuvable.');
- const timestamp=now();const number=existing?.number??((await db.sheets.orderBy('number').last())?.number??0)+1;
- const sheet:Sheet={id:input.id??uid(),number,deckId:input.deckId,title,content:input.content,tags:input.tags,createdAt:existing?.createdAt??timestamp,updatedAt:timestamp};
- await db.sheets.put(sheet);return sheet;
+ return db.transaction('rw',db.sheets,db.decks,db.sequences,async()=>{
+  if(input.deckId&&!await db.decks.get(input.deckId))throw Error('Deck introuvable.');
+  const existing=input.id?await db.sheets.get(input.id):undefined;
+  const timestamp=now(),number=existing?.number??await claimNumber('sheet');
+  const sheet:Sheet={id:input.id??uid(),number,deckId:input.deckId,title,content:input.content,tags:input.tags,createdAt:existing?.createdAt??timestamp,updatedAt:timestamp};
+  await db.sheets.put(sheet);return sheet;
+ });
 }
 export async function deleteSheet(id:string){await db.transaction('rw',db.sheets,db.cards,async()=>{await db.cards.where('sheetId').equals(id).modify({sheetId:null,sheetExcerpt:''});await db.sheets.delete(id);});}
 export async function getDueCards(deckId?:string){const source=deckId?await db.cards.where('deckId').equals(deckId).toArray():await db.cards.toArray();const cards=reviewVariants(source);const reviews=await db.reviews.bulkGet(cards.map(reviewKey));const time=now();return cards.filter((_,i)=>!reviews[i]||reviews[i]!.dueAt<=time);}
