@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { BookOpen, FileText, ArrowRight, Network, Search } from 'lucide-react';
-import type { Deck, Flashcard, Sheet, Review, ReviewLog } from '../lib/db';
+import { BookOpen, FileText, ArrowRight, Search } from 'lucide-react';
+import type { Deck, Flashcard, Sheet, Review, ReviewLog, Homework, StudyLink } from '../lib/db';
 import { cardTypeNames } from '../lib/db';
 
 export function SchemaView({decks,cards,sheets,onDeck,onCard,onSheet}:{decks:Deck[];cards:Flashcard[];sheets:Sheet[];onDeck:(id:string)=>void;onCard:(id:string)=>void;onSheet:(id:string)=>void}){
